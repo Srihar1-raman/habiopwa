@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  --cobalt: #004aad;
+  --peach: #ffbd59;
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f8f9fb;
+  color: var(--foreground);
+}
+
+/* Mobile-first max width container */
+.mobile-container {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: white;
+  position: relative;
+  overflow-x: hidden;
+}
