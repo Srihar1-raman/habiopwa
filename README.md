@@ -1,5 +1,6 @@
 # HABIO MVP
-
+db psw
+tatboh-8qybme-kUgjaq
 A **mobile-first** home services subscription platform — customer-facing web app + supervisor admin, backed by Supabase (Postgres).
 
 ## Tech Stack
