@@ -9,11 +9,18 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get active cart with items
+  // Get active cart with items — fetch all catalog snapshot fields
   const { data: cart } = await supabaseAdmin
     .from("carts")
     .select(
-      "id, cart_items(id, category_id, job_id, custom_title, frequency_label, minutes, unit_price_monthly, mrp_monthly, expectations_snapshot, service_jobs(name), service_categories(name))"
+      `id, cart_items(
+        id, category_id, job_id, job_code, custom_title,
+        frequency_label, unit_type, unit_value, minutes,
+        base_rate_per_unit, instances_per_month, discount_pct,
+        time_multiple, formula_type, base_price_monthly,
+        unit_price_monthly, mrp_monthly, expectations_snapshot,
+        service_jobs(name), service_categories(name)
+      )`
     )
     .eq("customer_id", customer.id)
     .eq("status", "active")
@@ -23,13 +30,22 @@ export async function POST() {
     return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
   }
 
-  const cartItems = (cart.cart_items as unknown) as Array<{
+  const cartItems = cart.cart_items as unknown as Array<{
     id: string;
     category_id: string;
     job_id: string | null;
+    job_code: string | null;
     custom_title: string | null;
     frequency_label: string;
+    unit_type: string;
+    unit_value: number;
     minutes: number;
+    base_rate_per_unit: number | null;
+    instances_per_month: number | null;
+    discount_pct: number | null;
+    time_multiple: number | null;
+    formula_type: string | null;
+    base_price_monthly: number | null;
     unit_price_monthly: number;
     mrp_monthly: number | null;
     expectations_snapshot: unknown;
@@ -64,17 +80,26 @@ export async function POST() {
     );
   }
 
-  // Copy cart items to plan request items
+  // Snapshot all catalog fields at time of submission
   const requestItems = cartItems.map((item) => ({
     plan_request_id: planRequest.id,
     category_id: item.category_id,
     job_id: item.job_id,
+    job_code: item.job_code || null,
     title:
       item.custom_title ||
       item.service_jobs?.name ||
       "Custom Service",
     frequency_label: item.frequency_label,
-    minutes: item.minutes,
+    unit_type: item.unit_type || "min",
+    unit_value: item.unit_value ?? item.minutes ?? 30,
+    minutes: item.minutes ?? item.unit_value ?? 30,
+    base_rate_per_unit: item.base_rate_per_unit ?? null,
+    instances_per_month: item.instances_per_month ?? null,
+    discount_pct: item.discount_pct ?? null,
+    time_multiple: item.time_multiple ?? null,
+    formula_type: item.formula_type || null,
+    base_price_monthly: item.base_price_monthly ?? null,
     price_monthly: item.unit_price_monthly,
     mrp_monthly: item.mrp_monthly,
     expectations_snapshot: item.expectations_snapshot,

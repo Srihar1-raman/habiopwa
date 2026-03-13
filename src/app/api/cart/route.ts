@@ -35,7 +35,14 @@ export async function GET() {
   const { data: items, error } = await supabaseAdmin
     .from("cart_items")
     .select(
-      "id, category_id, job_id, custom_title, frequency_label, minutes, unit_price_monthly, mrp_monthly, expectations_snapshot, sort_order, service_categories(slug, name), service_jobs(slug, name)"
+      `id, category_id, job_id, job_code, custom_title,
+       frequency_label, unit_type, unit_value, minutes,
+       base_rate_per_unit, instances_per_month, discount_pct,
+       time_multiple, formula_type, base_price_monthly,
+       unit_price_monthly, mrp_monthly,
+       expectations_snapshot, sort_order,
+       service_categories(slug, name),
+       service_jobs(slug, name, code)`
     )
     .eq("cart_id", cartId)
     .order("sort_order");
@@ -62,9 +69,18 @@ export async function POST(req: NextRequest) {
   const {
     category_id,
     job_id,
+    job_code,
     custom_title,
     frequency_label,
+    unit_type,
+    unit_value,
     minutes,
+    base_rate_per_unit,
+    instances_per_month,
+    discount_pct,
+    time_multiple,
+    formula_type,
+    base_price_monthly,
     unit_price_monthly,
     mrp_monthly,
     expectations_snapshot,
@@ -86,10 +102,22 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (existing) {
-      // Update existing item
+      // Update existing item with new unit/pricing values
       const { data: updated, error } = await supabaseAdmin
         .from("cart_items")
-        .update({ minutes, unit_price_monthly, mrp_monthly })
+        .update({
+          unit_type: unit_type ?? "min",
+          unit_value: unit_value ?? minutes ?? 30,
+          minutes: minutes ?? unit_value ?? 30,
+          base_rate_per_unit,
+          instances_per_month,
+          discount_pct,
+          time_multiple: time_multiple ?? null,
+          formula_type,
+          base_price_monthly,
+          unit_price_monthly,
+          mrp_monthly: mrp_monthly ?? null,
+        })
         .eq("id", existing.id)
         .select()
         .single();
@@ -111,9 +139,18 @@ export async function POST(req: NextRequest) {
       cart_id: cartId,
       category_id,
       job_id: job_id || null,
+      job_code: job_code || null,
       custom_title: custom_title || null,
       frequency_label: frequency_label || "Daily",
-      minutes: minutes || 30,
+      unit_type: unit_type || "min",
+      unit_value: unit_value ?? minutes ?? 30,
+      minutes: minutes ?? unit_value ?? 30,
+      base_rate_per_unit: base_rate_per_unit ?? null,
+      instances_per_month: instances_per_month ?? null,
+      discount_pct: discount_pct ?? null,
+      time_multiple: time_multiple ?? null,
+      formula_type: formula_type || null,
+      base_price_monthly: base_price_monthly ?? null,
       unit_price_monthly,
       mrp_monthly: mrp_monthly || null,
       expectations_snapshot: expectations_snapshot || null,

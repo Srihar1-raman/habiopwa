@@ -10,12 +10,22 @@ interface PlanItem {
   id?: string;
   category_id: string;
   job_id: string | null;
+  job_code: string | null;
   title: string;
   frequency_label: string;
+  unit_type: string;
+  unit_value: number;
   minutes: number;
+  base_rate_per_unit: number | null;
+  instances_per_month: number | null;
+  discount_pct: number | null;
+  time_multiple: number | null;
+  formula_type: string | null;
+  base_price_monthly: number | null;
   price_monthly: number;
   mrp_monthly: number | null;
   service_categories?: { slug: string; name: string } | null;
+  service_jobs?: { slug: string; name: string; code: string | null } | null;
 }
 
 interface CustomerProfile {
@@ -94,9 +104,18 @@ export default function SupervisorRequestDetailPage() {
       {
         category_id: firstCatId,
         job_id: null,
+        job_code: null,
         title: "Custom Service",
         frequency_label: "Daily",
+        unit_type: "min",
+        unit_value: 30,
         minutes: 30,
+        base_rate_per_unit: null,
+        instances_per_month: null,
+        discount_pct: null,
+        time_multiple: null,
+        formula_type: null,
+        base_price_monthly: null,
         price_monthly: 0,
         mrp_monthly: null,
       },
@@ -266,12 +285,24 @@ export default function SupervisorRequestDetailPage() {
               className="px-4 py-3 border-b border-gray-50 last:border-0"
             >
               <div className="flex items-start justify-between gap-2 mb-2">
-                <input
-                  className="flex-1 text-sm font-medium text-gray-900 border-b border-dashed border-gray-300 outline-none bg-transparent disabled:border-transparent"
-                  value={item.title}
-                  disabled={!canEdit}
-                  onChange={(e) => updateItem(idx, "title", e.target.value)}
-                />
+                <div className="flex-1 min-w-0">
+                  <input
+                    className="w-full text-sm font-medium text-gray-900 border-b border-dashed border-gray-300 outline-none bg-transparent disabled:border-transparent"
+                    value={item.title}
+                    disabled={!canEdit}
+                    onChange={(e) => updateItem(idx, "title", e.target.value)}
+                  />
+                  {(item.job_code || item.service_jobs?.code) && (
+                    <span className="text-[10px] font-mono text-gray-400 mt-0.5 block">
+                      {item.job_code ?? item.service_jobs?.code}
+                      {item.unit_type && item.unit_type !== "min" && (
+                        <span className="ml-1 text-gray-300">
+                          · {item.unit_type.replace("count_", "")}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
                 {canEdit && (
                   <button
                     onClick={() => removeItem(idx)}
@@ -283,15 +314,20 @@ export default function SupervisorRequestDetailPage() {
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1 text-xs text-gray-500">
-                  <span>Mins:</span>
+                  <span>
+                    {item.unit_type === "min" || !item.unit_type
+                      ? "Mins:"
+                      : `${item.unit_type.replace("count_", "")}:`}
+                  </span>
                   <input
                     type="number"
                     className="w-14 border rounded px-1.5 py-0.5 text-xs text-gray-700 disabled:border-transparent bg-white"
-                    value={item.minutes}
+                    value={item.unit_value ?? item.minutes}
                     disabled={!canEdit}
-                    onChange={(e) =>
-                      updateItem(idx, "minutes", Number(e.target.value))
-                    }
+                    onChange={(e) => {
+                      updateItem(idx, "unit_value", Number(e.target.value));
+                      updateItem(idx, "minutes", Number(e.target.value));
+                    }}
                   />
                 </div>
                 <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -323,6 +359,11 @@ export default function SupervisorRequestDetailPage() {
                     placeholder="optional"
                   />
                 </div>
+                {item.formula_type && item.formula_type !== "standard" && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded-full">
+                    {item.formula_type.replace("_", " ")}
+                  </span>
+                )}
               </div>
             </div>
           ))}
