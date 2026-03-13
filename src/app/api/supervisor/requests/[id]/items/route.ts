@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+interface PlanItemInput {
+  category_id: string;
+  job_id?: string | null;
+  title: string;
+  frequency_label?: string;
+  minutes?: number;
+  price_monthly: number;
+  mrp_monthly?: number | null;
+  expectations_snapshot?: unknown;
+}
+
 // PATCH — update or replace all items for a request
 export async function PATCH(
   req: NextRequest,
@@ -37,16 +48,7 @@ export async function PATCH(
     .delete()
     .eq("plan_request_id", id);
 
-  const newItems = items.map((item: {
-    category_id: string;
-    job_id?: string | null;
-    title: string;
-    frequency_label?: string;
-    minutes?: number;
-    price_monthly: number;
-    mrp_monthly?: number | null;
-    expectations_snapshot?: unknown;
-  }) => ({
+  const newItems = (items as PlanItemInput[]).map((item) => ({
     plan_request_id: id,
     category_id: item.category_id,
     job_id: item.job_id || null,

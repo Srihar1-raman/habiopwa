@@ -11,6 +11,8 @@ export function formatCurrency(amount: number): string {
 
 export function generateRequestCode(): string {
   const prefix = "HAB";
-  const suffix = Math.random().toString(36).substring(2, 7).toUpperCase();
-  return `${prefix}-${suffix}`;
+  // Use timestamp + random for better collision resistance
+  const ts = Date.now().toString(36).toUpperCase().slice(-4);
+  const rand = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `${prefix}-${ts}${rand}`;
 }
