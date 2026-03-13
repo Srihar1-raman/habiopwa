@@ -1,5 +1,28 @@
 -- HABIO MVP Schema
--- Run this in Supabase SQL editor (or via psql)
+-- Run this in Supabase SQL editor
+
+-- =====================
+-- EXTENSIONS
+-- =====================
+create extension if not exists pgcrypto;
+
+-- =====================
+-- ENUM TYPES (compat-safe for Supabase/Postgres)
+-- =====================
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cart_status') THEN
+    CREATE TYPE cart_status AS ENUM ('active', 'submitted');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'plan_request_status') THEN
+    CREATE TYPE plan_request_status AS ENUM ('submitted', 'under_process', 'finalized', 'paid', 'cancelled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
+    CREATE TYPE payment_status AS ENUM ('pending', 'succeeded', 'failed');
+  END IF;
+END $$;
 
 -- =====================
 -- CATALOG
@@ -83,8 +106,6 @@ CREATE TABLE IF NOT EXISTS customer_sessions (
 -- CART
 -- =====================
 
-CREATE TYPE IF NOT EXISTS cart_status AS ENUM ('active', 'submitted');
-
 CREATE TABLE IF NOT EXISTS carts (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -109,10 +130,6 @@ CREATE TABLE IF NOT EXISTS cart_items (
 -- =====================
 -- PLAN REQUESTS
 -- =====================
-
-CREATE TYPE IF NOT EXISTS plan_request_status AS ENUM (
-  'submitted', 'under_process', 'finalized', 'paid', 'cancelled'
-);
 
 CREATE TABLE IF NOT EXISTS plan_requests (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -150,8 +167,6 @@ CREATE TABLE IF NOT EXISTS plan_request_events (
 -- PAYMENTS (stub)
 -- =====================
 
-CREATE TYPE IF NOT EXISTS payment_status AS ENUM ('pending', 'succeeded', 'failed');
-
 CREATE TABLE IF NOT EXISTS payments (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   plan_request_id uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
@@ -177,7 +192,7 @@ CREATE INDEX IF NOT EXISTS idx_plan_request_items_request ON plan_request_items(
 CREATE INDEX IF NOT EXISTS idx_service_jobs_category ON service_jobs(category_id);
 
 -- =====================
--- RLS: deny public, allow service role
+-- RLS: deny public, allow service role (server only)
 -- =====================
 
 ALTER TABLE service_categories     ENABLE ROW LEVEL SECURITY;
@@ -193,3 +208,8 @@ ALTER TABLE plan_requests          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_request_items     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_request_events    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments               ENABLE ROW LEVEL SECURITY;
+
+-- NOTE:
+-- No RLS policies are created here on purpose.
+-- With RLS enabled and no policies, anon/authenticated users are denied.
+-- Your Next.js server should use the Supabase SERVICE_ROLE key to access data securely.
