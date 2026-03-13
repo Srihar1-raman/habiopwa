@@ -126,7 +126,7 @@ export default function SupervisorPage() {
                   <p className="text-sm text-gray-400">{req.customers.phone}</p>
                 )}
                 {location && (
-                  <p className="text-xs text-gray-400 mt-1">📍 {location}</p>
+                  <p className="text-xs text-gray-400 mt-1">{location}</p>
                 )}
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-base font-bold text-[#004aad]">

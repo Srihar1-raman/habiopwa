@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { CartItem } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Pencil, CheckCircle } from "lucide-react";
+import { ChevronLeft, Pencil, CheckCircle, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 interface SubmittedRequest {
@@ -66,7 +66,7 @@ export default function PlanPage() {
           </h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center gap-4">
-          <div className="text-5xl">🛒</div>
+          <ShoppingCart className="w-12 h-12 text-gray-300" />
           <p className="text-gray-500">Your cart is empty.</p>
           <Button onClick={() => router.push("/services")} variant="outline">
             Browse Services

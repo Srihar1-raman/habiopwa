@@ -264,9 +264,9 @@ export default function OnboardingPage() {
               </label>
               <div className="flex gap-2">
                 {[
-                  { val: "veg", label: "🥦 Veg" },
-                  { val: "non-veg", label: "🍖 Non-veg" },
-                  { val: "egg", label: "🥚 Egg" },
+                  { val: "veg", label: "Veg" },
+                  { val: "non-veg", label: "Non-veg" },
+                  { val: "egg", label: "Egg" },
                 ].map(({ val, label }) => (
                   <button
                     key={val}
@@ -302,11 +302,11 @@ export default function OnboardingPage() {
               {[
                 {
                   key: "cook_window_morning" as const,
-                  label: "🌅 Morning (6–10 AM)",
+                  label: "Morning (6–10 AM)",
                 },
                 {
                   key: "cook_window_evening" as const,
-                  label: "🌆 Evening (5–9 PM)",
+                  label: "Evening (5–9 PM)",
                 },
               ].map(({ key, label }) => (
                 <button
