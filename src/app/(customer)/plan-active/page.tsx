@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Home } from "lucide-react";
 
 interface PlanItem {
   id: string;
@@ -48,7 +48,7 @@ export default function PlanActivePage() {
   if (!planRequest || planRequest.status !== "paid") {
     return (
       <div className="flex flex-col min-h-dvh items-center justify-center px-8 text-center gap-4">
-        <div className="text-5xl">🏠</div>
+        <Home className="w-12 h-12 text-gray-300" />
         <h2 className="text-xl font-bold text-gray-900">No active plan</h2>
         <Button onClick={() => router.push("/services")}>Browse Services</Button>
       </div>

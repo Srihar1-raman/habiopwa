@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Home } from "lucide-react";
 
 type Step = "phone" | "otp";
 
@@ -14,6 +15,23 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Auto-redirect if a valid session already exists (e.g. user reloads /login directly)
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.authenticated) return;
+        if (!d.hasProfile) {
+          router.replace("/onboarding");
+        } else if (d.planStatus === "paid") {
+          router.replace("/plan-active");
+        } else {
+          router.replace("/services");
+        }
+      })
+      .catch(() => { /* session check failed -- stay on login */ });
+  }, [router]);
 
   async function handlePhoneSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -156,9 +174,10 @@ export default function LoginPage() {
 
       {/* Footer */}
       <div className="px-6 py-8">
-        <div className="bg-[#ffbd59]/20 rounded-xl px-4 py-3 text-center">
+        <div className="bg-[#ffbd59]/20 rounded-xl px-4 py-3 text-center flex items-center justify-center gap-2">
+          <Home className="w-4 h-4 text-amber-800 flex-shrink-0" />
           <p className="text-xs text-amber-800 font-medium">
-            🏠 Home services, scheduled your way
+            Home services, scheduled your way
           </p>
         </div>
       </div>
