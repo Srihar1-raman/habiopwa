@@ -12,15 +12,26 @@ export interface CartItem {
   id: string;
   category_id: string;
   job_id: string | null;
+  job_code: string | null;
   custom_title: string | null;
   frequency_label: string;
+  // unit snapshot
+  unit_type: string;
+  unit_value: number;
   minutes: number;
+  // pricing snapshot
+  base_rate_per_unit: number | null;
+  instances_per_month: number | null;
+  discount_pct: number | null;
+  time_multiple: number | null;
+  formula_type: string | null;
+  base_price_monthly: number | null;
   unit_price_monthly: number;
   mrp_monthly: number | null;
   expectations_snapshot: string[] | null;
   sort_order: number;
   service_categories?: { slug: string; name: string } | null;
-  service_jobs?: { slug: string; name: string } | null;
+  service_jobs?: { slug: string; name: string; code: string | null } | null;
 }
 
 interface CartContextValue {
@@ -31,7 +42,17 @@ interface CartContextValue {
   removeItem: (id: string) => Promise<void>;
   updateItem: (
     id: string,
-    data: Partial<Pick<CartItem, "minutes" | "unit_price_monthly" | "mrp_monthly">>
+    data: Partial<
+      Pick<
+        CartItem,
+        | "unit_type"
+        | "unit_value"
+        | "minutes"
+        | "base_price_monthly"
+        | "unit_price_monthly"
+        | "mrp_monthly"
+      >
+    >
   ) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -92,7 +113,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const updateItem = useCallback(
     async (
       id: string,
-      data: Partial<Pick<CartItem, "minutes" | "unit_price_monthly" | "mrp_monthly">>
+      data: Partial<
+        Pick<
+          CartItem,
+          | "unit_type"
+          | "unit_value"
+          | "minutes"
+          | "base_price_monthly"
+          | "unit_price_monthly"
+          | "mrp_monthly"
+        >
+      >
     ) => {
       const res = await fetch(`/api/cart/items/${id}`, {
         method: "PATCH",

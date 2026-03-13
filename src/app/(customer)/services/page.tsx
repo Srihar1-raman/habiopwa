@@ -20,6 +20,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { formatUnitValue } from "@/lib/pricing";
 import { Button } from "@/components/ui/button";
 
 interface Category {
@@ -33,8 +34,12 @@ interface PlanItem {
   id: string;
   title: string;
   frequency_label: string;
+  unit_type: string;
+  unit_value: number;
   minutes: number;
   price_monthly: number;
+  mrp_monthly: number | null;
+  job_code: string | null;
   category_id: string;
   service_categories?: { slug: string; name: string } | null;
 }
@@ -189,7 +194,11 @@ function PlanSummaryView({
                       {item.title}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {item.frequency_label} · {item.minutes} min
+                      {item.frequency_label} ·{" "}
+                      {formatUnitValue(
+                        item.unit_value ?? item.minutes,
+                        item.unit_type ?? "min"
+                      )}
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-gray-900">

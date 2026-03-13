@@ -10,7 +10,18 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("plan_requests")
     .select(
-      "id, request_code, status, total_price_monthly, created_at, updated_at, customers(id, phone, name, customer_profiles(*)), plan_request_items(id, category_id, job_id, title, frequency_label, minutes, price_monthly, mrp_monthly, expectations_snapshot, service_categories(slug, name), service_jobs(slug, name)), plan_request_events(id, event_type, note, created_at)"
+      `id, request_code, status, total_price_monthly, created_at, updated_at,
+       customers(id, phone, name, customer_profiles(*)),
+       plan_request_items(
+         id, category_id, job_id, job_code, title,
+         frequency_label, unit_type, unit_value, minutes,
+         base_rate_per_unit, instances_per_month, discount_pct,
+         time_multiple, formula_type, base_price_monthly,
+         price_monthly, mrp_monthly, expectations_snapshot,
+         service_categories(slug, name),
+         service_jobs(slug, name, code)
+       ),
+       plan_request_events(id, event_type, note, created_at)`
     )
     .eq("id", id)
     .single();

@@ -4,9 +4,18 @@ import { supabaseAdmin } from "@/lib/supabase";
 interface PlanItemInput {
   category_id: string;
   job_id?: string | null;
+  job_code?: string | null;
   title: string;
   frequency_label?: string;
+  unit_type?: string;
+  unit_value?: number;
   minutes?: number;
+  base_rate_per_unit?: number | null;
+  instances_per_month?: number | null;
+  discount_pct?: number | null;
+  time_multiple?: number | null;
+  formula_type?: string | null;
+  base_price_monthly?: number | null;
   price_monthly: number;
   mrp_monthly?: number | null;
   expectations_snapshot?: unknown;
@@ -52,9 +61,18 @@ export async function PATCH(
     plan_request_id: id,
     category_id: item.category_id,
     job_id: item.job_id || null,
+    job_code: item.job_code || null,
     title: item.title,
     frequency_label: item.frequency_label || "Daily",
-    minutes: item.minutes || 30,
+    unit_type: item.unit_type || "min",
+    unit_value: item.unit_value ?? item.minutes ?? 30,
+    minutes: item.minutes ?? item.unit_value ?? 30,
+    base_rate_per_unit: item.base_rate_per_unit ?? null,
+    instances_per_month: item.instances_per_month ?? null,
+    discount_pct: item.discount_pct ?? null,
+    time_multiple: item.time_multiple ?? null,
+    formula_type: item.formula_type || null,
+    base_price_monthly: item.base_price_monthly ?? null,
     price_monthly: item.price_monthly,
     mrp_monthly: item.mrp_monthly || null,
     expectations_snapshot: item.expectations_snapshot || null,
