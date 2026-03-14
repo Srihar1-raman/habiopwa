@@ -31,14 +31,21 @@ export interface CartItem {
   expectations_snapshot: string[] | null;
   sort_order: number;
   service_categories?: { slug: string; name: string } | null;
-  service_jobs?: { slug: string; name: string; code: string | null } | null;
+  service_jobs?: {
+    slug: string;
+    name: string;
+    code: string | null;
+    is_on_demand: boolean | null;
+  } | null;
 }
 
 interface CartContextValue {
   items: CartItem[];
   total: number;
   loading: boolean;
-  addItem: (item: Omit<CartItem, "id" | "sort_order">) => Promise<void>;
+  addItem: (
+    item: Omit<CartItem, "id" | "sort_order">
+  ) => Promise<{ ok: boolean; error?: string }>;
   removeItem: (id: string) => Promise<void>;
   updateItem: (
     id: string,
@@ -83,7 +90,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const addItem = useCallback(
-    async (item: Omit<CartItem, "id" | "sort_order">) => {
+    async (
+      item: Omit<CartItem, "id" | "sort_order">
+    ): Promise<{ ok: boolean; error?: string }> => {
       const res = await fetch("/api/cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,7 +100,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         await refresh();
+        return { ok: true };
       }
+      const data = await res.json().catch(() => ({ error: "Server error" }));
+      return { ok: false, error: data.error ?? "Failed to add item" };
     },
     [refresh]
   );

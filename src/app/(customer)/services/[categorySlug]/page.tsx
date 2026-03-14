@@ -129,6 +129,7 @@ export default function CategoryPlanPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [unitValues, setUnitValues] = useState<Record<string, number>>({});
   const [hasBasePlan, setHasBasePlan] = useState(false);
+  const [cartError, setCartError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/catalog")
@@ -155,12 +156,19 @@ export default function CategoryPlanPage() {
       });
   }, [categorySlug]);
 
-  // Detect whether customer has at least one non-on-demand job in the cart (base plan check).
-  // On-demand sub-card codes all contain "-OD-OD-" (e.g. HKP1-OD-OD-12A, KCH-OD-OD-2A, HMT-OD-OD-1A).
-  // Any cart item whose job_code does NOT contain "-OD-OD-" is a base plan (subscription) job.
+  // Detect whether the customer has at least one non-on-demand (base plan) job in the cart.
+  // Uses the `is_on_demand` field from the service_jobs catalog join — 100% driven by catalog data.
+  // Falls back to job_code pattern matching only for legacy items without a catalog link.
   useEffect(() => {
     setHasBasePlan(
-      items.some((i) => !i.job_code?.includes("-OD-OD-"))
+      items.some((i) => {
+        // Primary: use is_on_demand from the catalog join
+        if (i.service_jobs != null) {
+          return i.service_jobs.is_on_demand === false;
+        }
+        // Fallback for custom items without a catalog job link
+        return i.job_code !== null && !i.job_code.includes("-OD-OD-");
+      })
     );
   }, [items]);
 
@@ -182,6 +190,7 @@ export default function CategoryPlanPage() {
   }
 
   async function toggleJob(job: Job) {
+    setCartError(null);
     const cartItem = getCartItem(job.id);
     if (cartItem) {
       await removeItem(cartItem.id);
@@ -190,13 +199,13 @@ export default function CategoryPlanPage() {
 
     if (!category) return;
 
-    // On-demand jobs require an active base plan
+    // On-demand jobs require an active base plan (at least one non-on-demand job in cart)
     if (job.is_on_demand && !hasBasePlan) return;
 
     const inputValue = unitValues[job.id] ?? job.default_unit;
     const { base, effective } = computePrices(job, inputValue);
 
-    await addItem({
+    const result = await addItem({
       category_id: category.id,
       job_id: job.id,
       job_code: job.code,
@@ -215,10 +224,20 @@ export default function CategoryPlanPage() {
       mrp_monthly: base,
       expectations_snapshot: job.job_expectations.map((e) => e.text),
       service_categories: { slug: category.slug, name: category.name },
-      service_jobs: { slug: job.slug, name: job.name, code: job.code },
+      service_jobs: {
+        slug: job.slug,
+        name: job.name,
+        code: job.code,
+        is_on_demand: job.is_on_demand,
+      },
     });
 
-    // Expand card after adding
+    if (!result.ok) {
+      setCartError(result.error ?? "Could not add item. Please try again.");
+      return;
+    }
+
+    // Expand card after successfully adding
     setExpanded((prev) => new Set([...prev, job.id]));
   }
 
@@ -286,6 +305,18 @@ export default function CategoryPlanPage() {
 
       {/* Job Cards grouped by primary_card */}
       <div className="px-4 mt-4 flex flex-col gap-6">
+        {/* Cart error banner */}
+        {cartError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 flex items-center justify-between">
+            <span>{cartError}</span>
+            <button
+              onClick={() => setCartError(null)}
+              className="ml-3 text-red-400 hover:text-red-600 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {Object.entries(groups).map(([groupName, groupJobs]) => (
           <div key={groupName}>
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2 px-1">
