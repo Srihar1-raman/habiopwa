@@ -42,7 +42,7 @@ export async function GET() {
        unit_price_monthly, mrp_monthly,
        expectations_snapshot, sort_order,
        service_categories(slug, name),
-       service_jobs(slug, name, code)`
+       service_jobs(slug, name, code, is_on_demand)`
     )
     .eq("cart_id", cartId)
     .order("sort_order");
