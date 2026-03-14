@@ -7,6 +7,7 @@ import { CartItem } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Pencil, CheckCircle, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { formatUnitValue } from "@/lib/pricing";
 
 interface SubmittedRequest {
   requestCode: string;
@@ -169,7 +170,11 @@ export default function PlanPage() {
                         {item.service_jobs?.name ?? item.custom_title ?? "Custom"}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {item.frequency_label} · {item.minutes} min
+                        {item.frequency_label} ·{" "}
+                        {formatUnitValue(
+                          item.unit_value ?? item.minutes,
+                          item.unit_type ?? "min"
+                        )}
                       </p>
                     </div>
                     <p className="text-sm font-semibold text-gray-900">
