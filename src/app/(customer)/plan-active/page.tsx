@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { formatUnitValue } from "@/lib/pricing";
 import { CheckCircle, Home } from "lucide-react";
 
 interface PlanItem {
   id: string;
   title: string;
   frequency_label: string;
+  unit_type: string;
+  unit_value: number;
   minutes: number;
   price_monthly: number;
   service_categories?: { slug: string; name: string } | null;
@@ -112,7 +115,11 @@ export default function PlanActivePage() {
                       {item.title}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {item.frequency_label} · {item.minutes} min
+                      {item.frequency_label} ·{" "}
+                      {formatUnitValue(
+                        item.unit_value ?? item.minutes,
+                        item.unit_type ?? "min"
+                      )}
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-gray-900">
