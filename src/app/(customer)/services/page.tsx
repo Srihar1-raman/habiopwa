@@ -80,7 +80,7 @@ function getCategoryIcon(slug: string) {
     "kitchen-services": <UtensilsCrossed className="w-6 h-6 text-[#004aad]" />,
     "garden-care": <Leaf className="w-6 h-6 text-[#004aad]" />,
     "car-care": <Car className="w-6 h-6 text-[#004aad]" />,
-    "on-demand": <Zap className="w-6 h-6 text-[#004aad]" />,
+    "technician-services": <Zap className="w-6 h-6 text-[#004aad]" />,
   };
   return map[slug] ?? <Wrench className="w-6 h-6 text-[#004aad]" />;
 }

@@ -155,17 +155,12 @@ export default function CategoryPlanPage() {
       });
   }, [categorySlug]);
 
-  // Detect whether customer has at least one non-on-demand job in the cart (base plan check)
+  // Detect whether customer has at least one non-on-demand job in the cart (base plan check).
+  // On-demand sub-card codes all contain "-OD-OD-" (e.g. HKP1-OD-OD-12A, KCH-OD-OD-2A, HMT-OD-OD-1A).
+  // Any cart item whose job_code does NOT contain "-OD-OD-" is a base plan (subscription) job.
   useEffect(() => {
-    // Check if any cart item comes from a non-on-demand job
-    // We check job_code prefix against on-demand category OR rely on the is_on_demand snapshot.
-    // The safest check: any item whose category is not 'on-demand' is a base plan job.
     setHasBasePlan(
-      items.some(
-        (i) =>
-          i.service_categories?.slug !== "on-demand" &&
-          i.job_code?.startsWith("OND-") !== true
-      )
+      items.some((i) => !i.job_code?.includes("-OD-OD-"))
     );
   }, [items]);
 

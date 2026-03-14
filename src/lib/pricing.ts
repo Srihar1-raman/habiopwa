@@ -19,7 +19,8 @@ export type UnitType =
   | "count_cars"
   | "count_plants"
   | "count_balconies"
-  | "count_visits";
+  | "count_visits"
+  | "count_acs";
 
 export interface JobPricingParams {
   formula_type: FormulaType | string;
@@ -120,6 +121,8 @@ export function getUnitLabel(unitType: string): string {
       return "balconies";
     case "count_visits":
       return "visits";
+    case "count_acs":
+      return "ACs";
     default:
       return "units";
   }
@@ -142,6 +145,8 @@ export function getUnitDisplayName(unitType: string): string {
       return "Balconies";
     case "count_visits":
       return "Visits";
+    case "count_acs":
+      return "ACs";
     default:
       return "Count";
   }
