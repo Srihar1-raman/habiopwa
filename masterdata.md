@@ -1,0 +1,28 @@
+Service Category	Class	Service Type	Frequency	Primary Job Card	Primary Job Card	Sub Job Card	Sub Job (for staff allocation)	Unit	Unit Interval	Min Unit	Unit Time Multiple (min)	Base Rate per minute	Job instances per month	Discount	Scenario 1- 2BHK	Input	Base Price /m	Effective Price / m	Scenario 2 - 3BHK	Input	Base Price /m	Effective Price / m
+Housekeeping	HKP1	Core - Routine	Daily	HKP1-CR-D-1	Dusting, Brooming, Mopping	HKP1-CR-D-1A	Dusting, Brooming, Mopping	Minutes	15	30	15	3.3	30	30%		30	2,970	2,079		45	4,455	3,119
+Housekeeping	HKP1	Core - Routine	Daily	HKP1-CR-D-2	Dish Washing	HKP1-CR-D-2A	Dish Washing	Minutes	5	15	5	3.3	30	30%		15	1,485	1,040		15	1,485	1,040
+Housekeeping	HKP1	Add on - Routine	Daily	HKP1-AR-D-3	Laundry - Machine, Hang & Fold	HKP1-AR-D-3A	Laundry - Machine, Hang & Fold	Minutes	5	15	5	3.3	30	30%		15	1,485	1,040		15	1,485	1,040
+Housekeeping	HKP1	Add on - Routine	Daily	HKP1-AR-D-4	Washroom Floor Mopping	HKP1-AR-D-4A	Washroom Floor Mopping	No. of Washrooms	1	1	5	3.3	30	30%		2	990	693		3	1,485	1,040
+Housekeeping	HKP1	Add on - Routine	Daily	HKP1-AR-D-5	Add-on Time - General Purpose	HKP1-AR-D-5A	Add-on Time - General Purpose	Minutes	15	15	15	3.3	30	30%		0	0	0		0	0	0
+Housekeeping	HKP2	Add on - Routine	Weekly	HKP2-CR-W-6	Washroon / Toilet Deep Clean	HKP2-CR-W-6A	Washroon / Toilet Deep Clean	No. of Washrooms	1	1	30	5	4	30%		2	1,200	840		3	1,800	1,260
+Housekeeping	HKP1	Add on - Routine	Weekly	HKP1-AR-W-7	Window / Glass Panel Cleaning	HKP1-AR-W-7A	Window / Glass Panel Cleaning	Minutes	5	15	5	3.3	4	30%		15	198	139		30	396	277
+Housekeeping	HKP1	Add on - Routine	Weekly	HKP1-AR-W-8	Balcony Deep Clean	HKP1-AR-W-8A	Balcony Deep Clean	Minutes	10	10	10	3.3	4	30%		20	264	185		30	396	277
+Housekeeping	HKP3	Add on - Routine	Weekly	HKP3-AR-W-9	Laundry - Ironing	HKP3-AR-W-9A	Laundry - Ironing	Minutes	30	60	30	3.3	4	30%		60	792	554		120	1,584	1,109
+Housekeeping	HKP1	Add on - Routine	Weekly	HKP1-AR-W-10	Fridge, Microwave, Chimney & Stove Clean	HKP1-AR-W-10A	Fridge, Microwave, Chimney & Stove Clean	Minutes	15	30	15	3.3	4	30%		30	396	277		45	594	416
+Housekeeping	HKP1	Add on - Routine	Weekly	HKP1-AR-W-11	Kitchen / Pantry Cabinet Cleaning	HKP1-AR-W-11A	Kitchen / Pantry Cabinet Cleaning	Minutes	10	20	10	3.3	4	30%		20	264	185		30	396	277
+Kitchen Services	KCH	Core - Routine	Daily	KCH-CR-D-1	Daily Cooking- Morning Shift	KCH-CR-D-1A	Daily Cooking- Morning Shift	Minutes	15	45	15	4	30	30%		60	7,200	5,040		60	7,200	5,040
+Kitchen Services	KCH	Core - Routine	Daily	KCH-CR-D-1	Daily Cooking- Evening Shift	KCH-CR-D-2A	Daily Cooking- Evening Shift	Minutes	15	45	15	4	30	30%		0	0	0		60	7,200	5,040
+Car Care	CCR	Core - Routine	Daily	CCR-CR-D-1	Basic Car Care Routine	CCR-CR-D-1A	Daily Outer Cleaning	No. of Cars	1	1	15	3.3	30	30%		1	1,683	1,178		1	1,683	1,178
+Car Care	CCR	Core - Routine	Weekly	CCR-CR-D-1	Basic Car Care Routine	CCR-CR-D-1B	Cabin Weekly	No. of Cars	1	1	15	3.3	4	30%								
+Car Care	CCR	Add on - Routine	Weekly	CCR-AR-D-2	Weekly Car Shampoo Wash	CCR-AR-D-2A	Car Shampoo Wash	No. of Cars	1	1	15	3.3	4	30%		1	198	139		1	198	139
+Car Care	CCR	Add on - Routine	Daily	CCR-AR-D-3	Weekly Car Waxing	CCR-AR-D-3A	Car Waxing	No. of Cars	1	1	15	5	4	30%		1	300	210		1	300	210
+Garden Care	GCR	Core - Routine	Daily	GCR-CR-D-1	Basic Garden Care Routine	GCR-CR-D-1A	Daily Watering	No. of Plants	5	10	0.5	3.3	30	30%		15	1,337	936		20	1,782	1,247
+Garden Care	GCR	Core - Routine	Weekly	GCR-CR-D-1	Basic Garden Care Routine	GCR-CR-D-1B	Plant Dusting, Soil Pricking & Pruning	No. of Plants	5	10	3	3.3	4	30%								
+Housekeeping	HKP1	On Demand	Daily	HKP1-OD-OD-12	On Demand Time - General Purpose	HKP1-OD-OD-12A	On Demand Time - General Purpose	Minutes	15	15	15	3.3		30%		Plan	20,762	14,533		Plan	32,439	22,707
+Kitchen Services	KCH	On Demand	On Demand	KCH-OD-OD-2	Add on Cooking Time	KCH-OD-OD-2A	Add on Cooking Time	Minutes	30	60	30	4		30%								
+Technician Services	HMT	On Demand	On Demand	HMT-OD-OD-1	Visitation- Electrician	HMT-OD-OD-1A	Visitation- Electrician	Visit Count	1	1	30	4		30%								
+Technician Services	HMT	On Demand	On Demand	HMT-OD-OD-2	Visitation- Plumber	HMT-OD-OD-2A	Visitation- Plumber	Visit Count	1	1	30	4		30%								
+Technician Services	HMT	On Demand	On Demand	HMT-OD-OD-3	Visitation- Carpenter	HMT-OD-OD-3A	Visitation- Carpenter	Visit Count	1	1	30	4		30%								
+Technician Services	SMT	On Demand	On Demand	HMT-OD-OD-4	RO Service	HMT-OD-OD-4A	RO Service	Visit Count	1	1	60	5		30%								
+Technician Services	SMT	On Demand	On Demand	HMT-OD-OD-5	AC Service	HMT-OD-OD-5A	AC Service	No of ACs	1	1	60	5		30%								
+All On Demand Job cards enable only after subscription of base plan is active																						
