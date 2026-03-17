@@ -2,6 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCustomerFromRequest } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export async function PATCH(req: NextRequest) {
+  const customer = await getCustomerFromRequest();
+  if (!customer) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { preferred_start_date } = body;
+
+  // Find active cart
+  const { data: cart } = await supabaseAdmin
+    .from("carts")
+    .select("id")
+    .eq("customer_id", customer.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!cart) {
+    return NextResponse.json({ error: "No active cart" }, { status: 404 });
+  }
+
+  const { error } = await supabaseAdmin
+    .from("carts")
+    .update({ preferred_start_date: preferred_start_date ?? null })
+    .eq("id", cart.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function GET() {
   const customer = await getCustomerFromRequest();
   if (!customer) {
@@ -13,7 +46,7 @@ export async function GET() {
   const { data: cart, error: cartError } = await supabaseAdmin
     .from("carts")
     .select(
-      `id,
+      `id, preferred_start_date,
        cart_items(
          id, category_id, job_id, job_code, custom_title,
          frequency_label, unit_type, unit_value, minutes,
@@ -45,7 +78,7 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to create cart" }, { status: 500 });
     }
 
-    return NextResponse.json({ cartId: newCart.id, items: [], total: 0 });
+    return NextResponse.json({ cartId: newCart.id, items: [], total: 0, preferred_start_date: null });
   }
 
   // Sort items by sort_order in JavaScript (the nested select format does not
@@ -59,7 +92,7 @@ export async function GET() {
     0
   );
 
-  return NextResponse.json({ cartId: cart.id, items, total });
+  return NextResponse.json({ cartId: cart.id, items, total, preferred_start_date: (cart as { preferred_start_date?: string | null }).preferred_start_date ?? null });
 }
 
 export async function POST(req: NextRequest) {

@@ -306,3 +306,14 @@ ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS discount_pct         num
 ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS time_multiple        numeric(6,2);
 ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS formula_type         text;
 ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS base_price_monthly   numeric(10,2);
+-- =====================
+-- PLAN START DATE & CART PREFERRED DATE
+-- Add plan_start_date to plan_requests and preferred_start_date to carts.
+-- Safe to run multiple times (IF NOT EXISTS).
+-- =====================
+
+ALTER TABLE plan_requests
+  ADD COLUMN IF NOT EXISTS plan_start_date DATE;
+
+ALTER TABLE carts
+  ADD COLUMN IF NOT EXISTS preferred_start_date DATE;

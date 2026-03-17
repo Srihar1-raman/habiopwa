@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { CartCapsule } from "@/components/CartCapsule";
@@ -132,6 +132,8 @@ export default function CategoryPlanPage() {
   const [lockedToast, setLockedToast] = useState(false);
   // Track which job IDs are currently being toggled to prevent double-clicks
   const [toggling, setToggling] = useState<Set<string>>(new Set());
+  // On-demand and technician services only unlock after payment
+  const [customerHasPaid, setCustomerHasPaid] = useState(false);
 
   useEffect(() => {
     fetch("/api/catalog")
@@ -156,22 +158,16 @@ export default function CategoryPlanPage() {
         });
         setUnitValues(initial);
       });
-  }, [categorySlug]);
 
-  // Detect whether the customer has at least one non-on-demand (base plan) job in
-  // the cart.  Derived directly from `items` — no extra state or effect needed.
-  const hasBasePlan = useMemo(
-    () =>
-      items.some((i) => {
-        // Primary: use is_on_demand from the catalog join
-        if (i.service_jobs != null) {
-          return i.service_jobs.is_on_demand === false;
-        }
-        // Fallback for custom items without a catalog job link
-        return i.job_code !== null && !i.job_code.includes("-OD-OD-");
-      }),
-    [items]
-  );
+    // Check if customer has a paid plan — on-demand and technician services
+    // are locked until payment is confirmed
+    fetch("/api/plan/current")
+      .then((r) => r.json())
+      .then((d) => {
+        setCustomerHasPaid(d.planRequest?.status === "paid");
+      })
+      .catch(() => setCustomerHasPaid(false));
+  }, [categorySlug]);
 
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
@@ -209,8 +205,11 @@ export default function CategoryPlanPage() {
 
     if (!category) return;
 
-    // On-demand jobs require an active base plan (at least one non-on-demand job in cart)
-    if (job.is_on_demand && !hasBasePlan) {
+    // On-demand and technician service jobs are locked until the customer has paid
+    const isJobLocked =
+      (job.is_on_demand || category.slug === "technician-services") &&
+      !customerHasPaid;
+    if (isJobLocked) {
       setLockedToast(true);
       setTimeout(() => setLockedToast(false), 3000);
       return;
@@ -355,7 +354,9 @@ export default function CategoryPlanPage() {
                 const isOpen = expanded.has(job.id);
                 const inputValue = unitValues[job.id] ?? job.default_unit;
                 const { base, effective } = computePrices(job, inputValue);
-                const isLocked = job.is_on_demand && !hasBasePlan;
+                const isLocked =
+                  (job.is_on_demand || category.slug === "technician-services") &&
+                  !customerHasPaid;
                 const isToggling = toggling.has(job.id);
 
                 return (

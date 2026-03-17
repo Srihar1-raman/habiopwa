@@ -18,6 +18,7 @@ import {
   Car,
   Zap,
   Wrench,
+  CalendarDays,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatUnitValue } from "@/lib/pricing";
@@ -229,9 +230,33 @@ function PlanSummaryView({
   );
 }
 
+/** Returns YYYY-MM-DD string for today + N days */
+function daysFromToday(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Formats a YYYY-MM-DD string as "21 March '26" */
+function formatStartDate(dateStr: string): string {
+  // Parse as local date to avoid timezone offset issues
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  return d
+    .toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "2-digit",
+    })
+    .replace(/(\d+) (\w+) (\d+)/, "$1 $2 '$3");
+}
+
 export default function ServicesHomePage() {
   const router = useRouter();
-  const { items } = useCart();
+  const { items, preferredStartDate, updatePreferredStartDate } = useCart();
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeBanner, setActiveBanner] = useState(0);
   const bannerRef = useRef<NodeJS.Timeout | null>(null);
@@ -239,6 +264,11 @@ export default function ServicesHomePage() {
   const [planRequest, setPlanRequest] = useState<PlanRequest | null | undefined>(
     undefined
   );
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Effective start date: user's preferred date or default +3 days
+  const effectiveStartDate = preferredStartDate ?? daysFromToday(3);
+  const minStartDate = daysFromToday(3);
 
   useEffect(() => {
     // Check for an existing plan request first
@@ -336,18 +366,45 @@ export default function ServicesHomePage() {
       {/* Category Cards */}
       <div className="px-4 mt-6">
         <h2 className="text-base font-semibold text-gray-900 mb-0.5">Customize your Plan</h2>
-        <p className="text-sm text-gray-500 mb-3">
-          Plan Start Date:{" "}
-          {(() => {
-            const d = new Date();
-            d.setDate(d.getDate() + 3);
-            return d.toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "long",
-              year: "2-digit",
-            }).replace(/(\d+) (\w+) (\d+)/, "$1 $2 '$3");
-          })()}
-        </p>
+        <div className="flex items-center gap-1.5 mb-3">
+          <p className="text-sm text-gray-500">
+            Plan Start Date:{" "}
+            <span className="font-medium text-gray-700">
+              {formatStartDate(effectiveStartDate)}
+            </span>
+          </p>
+          <button
+            onClick={() => setShowDatePicker((v) => !v)}
+            className="p-0.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Change plan start date"
+          >
+            <CalendarDays className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Date picker popover */}
+        {showDatePicker && (
+          <div className="mb-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Choose Start Date
+            </p>
+            <p className="text-xs text-gray-400 mb-3">
+              Earliest available: {formatStartDate(minStartDate)}
+            </p>
+            <input
+              type="date"
+              min={minStartDate}
+              value={effectiveStartDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  updatePreferredStartDate(e.target.value);
+                  setShowDatePicker(false);
+                }
+              }}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#004aad]/30 focus:border-[#004aad]"
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-3">
           {categories.map((cat) => {
             const count = getCartCountForCategory(cat.id);

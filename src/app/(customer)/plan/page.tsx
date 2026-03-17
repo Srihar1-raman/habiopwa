@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { CartItem } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Pencil, CheckCircle, ShoppingCart, Zap, Wrench, Hammer } from "lucide-react";
+import { ChevronLeft, Pencil, CheckCircle, ShoppingCart, Zap, Wrench, Hammer, CalendarDays } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatUnitValue } from "@/lib/pricing";
 
@@ -14,14 +14,40 @@ interface SubmittedRequest {
   requestId: string;
   status: string;
   total: number;
+  planStartDate: string | null;
+}
+
+/** Formats a YYYY-MM-DD string as "21 March '26" */
+function formatStartDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  return d
+    .toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "2-digit",
+    })
+    .replace(/(\d+) (\w+) (\d+)/, "$1 $2 '$3");
+}
+
+function defaultStartDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function PlanPage() {
   const router = useRouter();
-  const { items, total } = useCart();
+  const { items, total, preferredStartDate } = useCart();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<SubmittedRequest | null>(null);
   const [error, setError] = useState("");
+
+  // Display date: use stored preferred date or default +3 days
+  const displayStartDate = preferredStartDate ?? defaultStartDate();
 
   // Group items by category
   const grouped = items.reduce(
@@ -49,6 +75,7 @@ export default function PlanPage() {
       requestId: data.requestId,
       status: data.status,
       total: data.total,
+      planStartDate: data.planStartDate ?? null,
     });
   }
 
@@ -108,6 +135,15 @@ export default function PlanPage() {
               </p>
             </div>
           </div>
+          <div className="mt-3 pt-3 border-t border-blue-100 flex items-center gap-1.5">
+            <CalendarDays className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+            <p className="text-xs text-gray-500">
+              Plan Start Date:{" "}
+              <span className="font-medium text-gray-700">
+                {formatStartDate(submitted?.planStartDate ?? displayStartDate)}
+              </span>
+            </p>
+          </div>
         </div>
 
         {/* Submitted Confirmation */}
@@ -121,6 +157,12 @@ export default function PlanPage() {
               Request ID:{" "}
               <span className="font-mono font-semibold">{submitted.requestCode}</span>
             </p>
+            {submitted.planStartDate && (
+              <p className="text-sm text-green-700 mt-1">
+                Start Date:{" "}
+                <span className="font-semibold">{formatStartDate(submitted.planStartDate)}</span>
+              </p>
+            )}
             <p className="text-sm text-green-600 mt-1">
               Status: Under review by our team. We&apos;ll notify you once
               finalized.
