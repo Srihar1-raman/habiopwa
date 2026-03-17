@@ -130,6 +130,7 @@ export default function CategoryPlanPage() {
   const [unitValues, setUnitValues] = useState<Record<string, number>>({});
   const [hasBasePlan, setHasBasePlan] = useState(false);
   const [cartError, setCartError] = useState<string | null>(null);
+  const [lockedToast, setLockedToast] = useState(false);
 
   useEffect(() => {
     fetch("/api/catalog")
@@ -200,7 +201,11 @@ export default function CategoryPlanPage() {
     if (!category) return;
 
     // On-demand jobs require an active base plan (at least one non-on-demand job in cart)
-    if (job.is_on_demand && !hasBasePlan) return;
+    if (job.is_on_demand && !hasBasePlan) {
+      setLockedToast(true);
+      setTimeout(() => setLockedToast(false), 3000);
+      return;
+    }
 
     const inputValue = unitValues[job.id] ?? job.default_unit;
     const { base, effective } = computePrices(job, inputValue);
@@ -317,6 +322,13 @@ export default function CategoryPlanPage() {
             </button>
           </div>
         )}
+        {/* Locked toast */}
+        {lockedToast && (
+          <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+            <Lock className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            Please select a base plan first
+          </div>
+        )}
         {Object.entries(groups).map(([groupName, groupJobs]) => (
           <div key={groupName}>
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2 px-1">
@@ -344,8 +356,7 @@ export default function CategoryPlanPage() {
                     {/* Card Header */}
                     <div className="flex items-center gap-3 p-4">
                       <button
-                        onClick={() => !isLocked && toggleJob(job)}
-                        disabled={isLocked}
+                        onClick={() => toggleJob(job)}
                         className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                           inCart
                             ? "bg-[#004aad] border-[#004aad]"
@@ -360,28 +371,9 @@ export default function CategoryPlanPage() {
                         )}
                       </button>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-semibold text-gray-900 leading-tight">
-                            {job.name}
-                          </p>
-                          {job.service_type && (
-                            <span
-                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                                job.service_type === "Core - Routine"
-                                  ? "bg-blue-50 text-blue-600"
-                                  : job.service_type === "On Demand"
-                                  ? "bg-orange-50 text-orange-600"
-                                  : "bg-gray-100 text-gray-500"
-                              }`}
-                            >
-                              {job.service_type === "Core - Routine"
-                                ? "Core"
-                                : job.service_type === "Add on - Routine"
-                                ? "Add-on"
-                                : "On Demand"}
-                            </span>
-                          )}
-                        </div>
+                        <p className="font-semibold text-gray-900 leading-tight">
+                          {job.name}
+                        </p>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {job.frequency_label}
                           {inCart && (
@@ -391,7 +383,7 @@ export default function CategoryPlanPage() {
                           )}
                           {isLocked && (
                             <span className="ml-2 text-orange-500 font-medium">
-                              · Requires active plan
+                              · Requires base plan
                             </span>
                           )}
                         </p>
@@ -482,20 +474,6 @@ export default function CategoryPlanPage() {
                           </div>
                         )}
 
-                        {/* Sub-card & code chips */}
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {job.sub_card && (
-                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                              {job.sub_card}
-                            </span>
-                          )}
-                          {job.code && (
-                            <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full font-mono">
-                              {job.code}
-                            </span>
-                          )}
-                        </div>
-
                         {!inCart && !isLocked && (
                           <button
                             onClick={() => toggleJob(job)}
@@ -506,9 +484,13 @@ export default function CategoryPlanPage() {
                         )}
 
                         {isLocked && (
-                          <div className="w-full py-3 rounded-xl bg-gray-100 text-gray-400 font-medium text-sm text-center">
-                            Subscribe to a base plan to unlock
-                          </div>
+                          <button
+                            onClick={() => toggleJob(job)}
+                            className="w-full py-3 rounded-xl bg-gray-100 text-gray-400 font-medium text-sm text-center flex items-center justify-center gap-2"
+                          >
+                            <Lock className="w-4 h-4" />
+                            Select a base plan to unlock
+                          </button>
                         )}
                       </div>
                     )}

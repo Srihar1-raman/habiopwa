@@ -6,34 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft } from "lucide-react";
 
-type Step = "address" | "home" | "kitchen";
+type Step = "address" | "home";
 
 interface FormData {
   // Address
   flat_no: string;
   building: string;
   society: string;
-  sector: string;
-  city: string;
   pincode: string;
-  // Home
+  // Home + Kitchen (merged)
   home_type: string;
   bhk: string;
   bathrooms: string;
-  balconies: string;
-  // Kitchen
   diet_pref: string;
   people_count: string;
-  cook_window_morning: boolean;
-  cook_window_evening: boolean;
-  kitchen_notes: string;
 }
 
-const STEPS: Step[] = ["address", "home", "kitchen"];
+const STEPS: Step[] = ["address", "home"];
 const STEP_LABELS: Record<Step, string> = {
   address: "Your Address",
-  home: "Home Details",
-  kitchen: "Kitchen Context",
+  home: "Home & Kitchen",
 };
 
 export default function OnboardingPage() {
@@ -45,36 +37,32 @@ export default function OnboardingPage() {
     flat_no: "",
     building: "",
     society: "",
-    sector: "",
-    city: "",
     pincode: "",
     home_type: "",
     bhk: "",
     bathrooms: "",
-    balconies: "",
     diet_pref: "veg",
     people_count: "",
-    cook_window_morning: false,
-    cook_window_evening: false,
-    kitchen_notes: "",
   });
 
   const stepIndex = STEPS.indexOf(step);
 
-  function update(field: keyof FormData, value: string | boolean) {
+  function update(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   function handleNext() {
     setError("");
     if (step === "address") {
-      if (!form.flat_no.trim()) {
-        setError("Flat/house number is required");
+      if (!form.society.trim()) {
+        setError("Society / Apartment is required");
+        return;
+      }
+      if (!form.pincode.trim() || !/^\d{6}$/.test(form.pincode)) {
+        setError("Enter a valid 6-digit pincode");
         return;
       }
       setStep("home");
-    } else if (step === "home") {
-      setStep("kitchen");
     } else {
       handleSubmit();
     }
@@ -82,7 +70,6 @@ export default function OnboardingPage() {
 
   function handleBack() {
     if (step === "home") setStep("address");
-    else if (step === "kitchen") setStep("home");
   }
 
   async function handleSubmit() {
@@ -91,11 +78,21 @@ export default function OnboardingPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...form,
+        flat_no: form.flat_no,
+        building: form.building,
+        society: form.society,
+        sector: "",
+        city: "Gurugram",
+        pincode: form.pincode,
+        home_type: form.home_type,
         bhk: form.bhk ? Number(form.bhk) : null,
         bathrooms: form.bathrooms ? Number(form.bathrooms) : null,
-        balconies: form.balconies ? Number(form.balconies) : null,
+        balconies: null,
+        diet_pref: form.diet_pref,
         people_count: form.people_count ? Number(form.people_count) : null,
+        cook_window_morning: false,
+        cook_window_evening: false,
+        kitchen_notes: "",
       }),
     });
     setLoading(false);
@@ -144,37 +141,25 @@ export default function OnboardingPage() {
         {step === "address" && (
           <div className="flex flex-col gap-4">
             <Input
-              label="Flat / House No. *"
+              label="Flat / House / Floor Number"
               placeholder="e.g. A-204"
               value={form.flat_no}
               onChange={(e) => update("flat_no", e.target.value)}
             />
             <Input
-              label="Building / Tower"
+              label="Building / Tower Info"
               placeholder="e.g. Tower A"
               value={form.building}
               onChange={(e) => update("building", e.target.value)}
             />
             <Input
-              label="Society / Apartment"
+              label="Society / Sector / Apartment *"
               placeholder="e.g. Sunrise Residency"
               value={form.society}
               onChange={(e) => update("society", e.target.value)}
             />
             <Input
-              label="Sector / Area"
-              placeholder="e.g. Sector 56"
-              value={form.sector}
-              onChange={(e) => update("sector", e.target.value)}
-            />
-            <Input
-              label="City"
-              placeholder="e.g. Gurgaon"
-              value={form.city}
-              onChange={(e) => update("city", e.target.value)}
-            />
-            <Input
-              label="Pincode"
+              label="Pincode *"
               placeholder="e.g. 122011"
               inputMode="numeric"
               maxLength={6}
@@ -183,6 +168,13 @@ export default function OnboardingPage() {
                 update("pincode", e.target.value.replace(/\D/g, ""))
               }
             />
+            {/* City - display only */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">City</label>
+              <div className="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 text-base">
+                Gurugram
+              </div>
+            </div>
           </div>
         )}
 
@@ -234,30 +226,16 @@ export default function OnboardingPage() {
             </div>
 
             <Input
-              label="Bathrooms"
+              label="Washrooms / Toilets"
               type="number"
               min="1"
               max="10"
               inputMode="numeric"
               value={form.bathrooms}
               onChange={(e) => update("bathrooms", e.target.value)}
-              placeholder="Number of bathrooms"
+              placeholder="Number of washrooms/toilets"
             />
-            <Input
-              label="Balconies (optional)"
-              type="number"
-              min="0"
-              max="10"
-              inputMode="numeric"
-              value={form.balconies}
-              onChange={(e) => update("balconies", e.target.value)}
-              placeholder="Number of balconies"
-            />
-          </div>
-        )}
 
-        {step === "kitchen" && (
-          <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
                 Diet Preference
@@ -266,7 +244,6 @@ export default function OnboardingPage() {
                 {[
                   { val: "veg", label: "Veg" },
                   { val: "non-veg", label: "Non-veg" },
-                  { val: "egg", label: "Egg" },
                 ].map(({ val, label }) => (
                   <button
                     key={val}
@@ -292,73 +269,8 @@ export default function OnboardingPage() {
               inputMode="numeric"
               value={form.people_count}
               onChange={(e) => update("people_count", e.target.value)}
-              placeholder="How many people to cook for"
+              placeholder="How many people in your home"
             />
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700">
-                Preferred Cook Windows
-              </label>
-              {[
-                {
-                  key: "cook_window_morning" as const,
-                  label: "Morning (6–10 AM)",
-                },
-                {
-                  key: "cook_window_evening" as const,
-                  label: "Evening (5–9 PM)",
-                },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => update(key, !form[key])}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium text-left transition-all ${
-                    form[key]
-                      ? "bg-[#004aad]/10 text-[#004aad] border-[#004aad]"
-                      : "bg-white text-gray-700 border-gray-200"
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      form[key]
-                        ? "bg-[#004aad] border-[#004aad]"
-                        : "border-gray-300"
-                    }`}
-                  >
-                    {form[key] && (
-                      <svg
-                        className="w-3 h-3 text-white"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                      >
-                        <path
-                          d="M2 6l3 3 5-5"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </div>
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Allergies / Notes (optional)
-              </label>
-              <textarea
-                value={form.kitchen_notes}
-                onChange={(e) => update("kitchen_notes", e.target.value)}
-                placeholder="e.g. No onion-garlic, nut allergy…"
-                rows={3}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 outline-none focus:border-[#004aad] focus:ring-2 focus:ring-[#004aad]/20 resize-none"
-              />
-            </div>
           </div>
         )}
 
@@ -375,7 +287,7 @@ export default function OnboardingPage() {
           onClick={handleNext}
           className="w-full"
         >
-          {step === "kitchen" ? "Save & Continue" : "Next"}
+          {step === "home" ? "Save & Continue" : "Next"}
         </Button>
       </div>
     </div>

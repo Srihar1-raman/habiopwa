@@ -307,22 +307,18 @@ export default function ServicesHomePage() {
             <span className="text-xl font-bold text-[#004aad]">HABIO</span>
           </div>
         </div>
-        <h1 className="text-xl font-bold text-gray-900 mt-4">Build Your Plan</h1>
-        <p className="text-sm text-gray-500">
-          Pick services for your monthly subscription
-        </p>
       </div>
 
-      {/* Auto-swiping banner */}
+      {/* Auto-swiping banner — positioned immediately below logo */}
       <div className="px-4 mt-2">
         <div
-          className={`${banner.bg} rounded-2xl px-5 py-5 text-white transition-all duration-500`}
+          className={`${banner.bg} rounded-2xl px-5 py-8 text-white transition-all duration-500`}
         >
-          <div className="mb-2">
-            <BannerIcon className="w-8 h-8 text-white/80" />
+          <div className="mb-3">
+            <BannerIcon className="w-10 h-10 text-white/80" />
           </div>
-          <h2 className="text-lg font-bold leading-snug">{banner.title}</h2>
-          <p className="text-sm text-blue-100 mt-1">{banner.sub}</p>
+          <h2 className="text-xl font-bold leading-snug">{banner.title}</h2>
+          <p className="text-sm text-blue-100 mt-1.5">{banner.sub}</p>
         </div>
         {/* Banner dots */}
         <div className="flex justify-center gap-1.5 mt-3">
@@ -339,7 +335,19 @@ export default function ServicesHomePage() {
 
       {/* Category Cards */}
       <div className="px-4 mt-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Services</h2>
+        <h2 className="text-base font-semibold text-gray-900 mb-0.5">Customize your Plan</h2>
+        <p className="text-sm text-gray-500 mb-3">
+          Plan Start Date:{" "}
+          {(() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 3);
+            return d.toLocaleDateString("en-IN", {
+              day: "numeric",
+              month: "long",
+              year: "2-digit",
+            }).replace(/(\d+) (\w+) (\d+)/, "$1 $2 '$3");
+          })()}
+        </p>
         <div className="flex flex-col gap-3">
           {categories.map((cat) => {
             const count = getCartCountForCategory(cat.id);

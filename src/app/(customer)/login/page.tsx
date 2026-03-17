@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Home } from "lucide-react";
 
 type Step = "phone" | "otp";
@@ -12,9 +11,10 @@ export default function LoginPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Auto-redirect if a valid session already exists (e.g. user reloads /login directly)
   useEffect(() => {
@@ -57,8 +57,9 @@ export default function LoginPage() {
   async function handleOtpSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!otp) {
-      setError("Enter the OTP");
+    const otp = otpDigits.join("");
+    if (otp.length < 6) {
+      setError("Enter the 6-digit OTP");
       return;
     }
     setLoading(true);
@@ -77,6 +78,34 @@ export default function LoginPage() {
       router.push("/services");
     } else {
       router.push("/onboarding");
+    }
+  }
+
+  function handleOtpDigitChange(index: number, value: string) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const next = [...otpDigits];
+    next[index] = digit;
+    setOtpDigits(next);
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length > 0) {
+      const next = ["", "", "", "", "", ""];
+      for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
+      setOtpDigits(next);
+      const focusIdx = Math.min(pasted.length, 5);
+      otpRefs.current[focusIdx]?.focus();
     }
   }
 
@@ -137,23 +166,40 @@ export default function LoginPage() {
               Get OTP
             </Button>
             <p className="text-xs text-center text-gray-400 mt-2">
-              By continuing you agree to our Terms &amp; Privacy Policy
+              By continuing, you accept our{" "}
+              <a
+                href="/terms"
+                className="text-[#004aad] underline font-medium"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Terms &amp; Conditions
+              </a>
             </p>
           </form>
         ) : (
           <form onSubmit={handleOtpSubmit} className="flex flex-col gap-4">
-            <Input
-              type="tel"
-              inputMode="numeric"
-              maxLength={6}
-              label="OTP"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-              placeholder="Enter 6-digit OTP"
-              helper="For MVP: use OTP 123456"
-              error={error}
-              autoFocus
-            />
+            {/* 6 individual digit blocks */}
+            <div className="flex gap-2 justify-center">
+              {otpDigits.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { otpRefs.current[i] = el; }}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpDigitChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  onPaste={i === 0 ? handleOtpPaste : undefined}
+                  autoFocus={i === 0}
+                  aria-label={`OTP digit ${i + 1}`}
+                  className="w-12 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all bg-white text-gray-900 border-gray-300 focus:border-[#004aad] focus:ring-2 focus:ring-[#004aad]/20 caret-transparent"
+                />
+              ))}
+            </div>
+            <p className="text-xs text-center text-gray-400">For MVP: use OTP 123456</p>
+            {error && <p className="text-sm text-red-600 text-center">{error}</p>}
             <Button type="submit" size="lg" loading={loading}>
               Verify &amp; Continue
             </Button>
@@ -161,7 +207,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => {
                 setStep("phone");
-                setOtp("");
+                setOtpDigits(["", "", "", "", "", ""]);
                 setError("");
               }}
               className="text-sm text-[#004aad] font-medium text-center"
