@@ -2,61 +2,64 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCustomerFromRequest } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase";
 
-async function getOrCreateActiveCart(customerId: string) {
-  // Try to find existing active cart
-  const { data: existing } = await supabaseAdmin
-    .from("carts")
-    .select("id")
-    .eq("customer_id", customerId)
-    .eq("status", "active")
-    .single();
-
-  if (existing) return existing.id as string;
-
-  // Create new cart
-  const { data: newCart, error } = await supabaseAdmin
-    .from("carts")
-    .insert({ customer_id: customerId, status: "active" })
-    .select("id")
-    .single();
-
-  if (error || !newCart) throw new Error("Failed to create cart");
-  return newCart.id as string;
-}
-
 export async function GET() {
   const customer = await getCustomerFromRequest();
   if (!customer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cartId = await getOrCreateActiveCart(customer.id);
-
-  const { data: items, error } = await supabaseAdmin
-    .from("cart_items")
+  // Fetch the active cart together with its items in a single query to avoid
+  // the extra round-trip that a separate `getOrCreateActiveCart` call incurs.
+  const { data: cart, error: cartError } = await supabaseAdmin
+    .from("carts")
     .select(
-      `id, category_id, job_id, job_code, custom_title,
-       frequency_label, unit_type, unit_value, minutes,
-       base_rate_per_unit, instances_per_month, discount_pct,
-       time_multiple, formula_type, base_price_monthly,
-       unit_price_monthly, mrp_monthly,
-       expectations_snapshot, sort_order,
-       service_categories(slug, name),
-       service_jobs(slug, name, code, is_on_demand)`
+      `id,
+       cart_items(
+         id, category_id, job_id, job_code, custom_title,
+         frequency_label, unit_type, unit_value, minutes,
+         base_rate_per_unit, instances_per_month, discount_pct,
+         time_multiple, formula_type, base_price_monthly,
+         unit_price_monthly, mrp_monthly,
+         expectations_snapshot, sort_order,
+         service_categories(slug, name),
+         service_jobs(slug, name, code, is_on_demand)
+       )`
     )
-    .eq("cart_id", cartId)
-    .order("sort_order");
+    .eq("customer_id", customer.id)
+    .eq("status", "active")
+    .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (cartError) {
+    return NextResponse.json({ error: cartError.message }, { status: 500 });
   }
 
-  const total = (items ?? []).reduce(
+  // No active cart yet — create one and return an empty response
+  if (!cart) {
+    const { data: newCart, error: createError } = await supabaseAdmin
+      .from("carts")
+      .insert({ customer_id: customer.id, status: "active" })
+      .select("id")
+      .single();
+
+    if (createError || !newCart) {
+      return NextResponse.json({ error: "Failed to create cart" }, { status: 500 });
+    }
+
+    return NextResponse.json({ cartId: newCart.id, items: [], total: 0 });
+  }
+
+  // Sort items by sort_order in JavaScript (the nested select format does not
+  // support an inline ORDER BY for embedded relations)
+  const items = [...(cart.cart_items ?? [])].sort(
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+  );
+
+  const total = items.reduce(
     (sum, item) => sum + Number(item.unit_price_monthly),
     0
   );
 
-  return NextResponse.json({ cartId, items: items ?? [], total });
+  return NextResponse.json({ cartId: cart.id, items, total });
 }
 
 export async function POST(req: NextRequest) {
@@ -90,7 +93,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const cartId = await getOrCreateActiveCart(customer.id);
+  // Find or create the customer's active cart
+  let cartId: string;
+  const { data: existingCart } = await supabaseAdmin
+    .from("carts")
+    .select("id")
+    .eq("customer_id", customer.id)
+    .eq("status", "active")
+    .single();
+
+  if (existingCart) {
+    cartId = existingCart.id as string;
+  } else {
+    const { data: newCart, error: createError } = await supabaseAdmin
+      .from("carts")
+      .insert({ customer_id: customer.id, status: "active" })
+      .select("id")
+      .single();
+
+    if (createError || !newCart) {
+      return NextResponse.json({ error: "Failed to create cart" }, { status: 500 });
+    }
+    cartId = newCart.id as string;
+  }
 
   // Check if job already in cart
   if (job_id) {
