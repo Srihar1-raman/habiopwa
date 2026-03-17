@@ -13,7 +13,7 @@ export async function POST() {
   const { data: cart } = await supabaseAdmin
     .from("carts")
     .select(
-      `id, cart_items(
+      `id, preferred_start_date, cart_items(
         id, category_id, job_id, job_code, custom_title,
         frequency_label, unit_type, unit_value, minutes,
         base_rate_per_unit, instances_per_month, discount_pct,
@@ -30,7 +30,7 @@ export async function POST() {
     return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
   }
 
-  const cartItems = cart.cart_items as unknown as Array<{
+  interface CartItemRow {
     id: string;
     category_id: string;
     job_id: string | null;
@@ -51,7 +51,17 @@ export async function POST() {
     expectations_snapshot: unknown;
     service_jobs: { name: string } | null;
     service_categories: { name: string } | null;
-  }>;
+  }
+
+  interface CartRow {
+    id: string;
+    preferred_start_date: string | null;
+    cart_items: CartItemRow[];
+  }
+
+  const cartData = cart as unknown as CartRow;
+  const cartItems = cartData.cart_items;
+  const planStartDate = cartData.preferred_start_date ?? null;
 
   const totalPrice = cartItems.reduce(
     (sum, item) => sum + Number(item.unit_price_monthly),
@@ -69,8 +79,9 @@ export async function POST() {
       customer_id: customer.id,
       status: "submitted",
       total_price_monthly: totalPrice,
+      plan_start_date: planStartDate,
     })
-    .select("id, request_code, status, total_price_monthly")
+    .select("id, request_code, status, total_price_monthly, plan_start_date")
     .single();
 
   if (reqError || !planRequest) {
@@ -126,11 +137,22 @@ export async function POST() {
     note: "Customer submitted plan request",
   });
 
+  interface PlanRequestRow {
+    id: string;
+    request_code: string;
+    status: string;
+    total_price_monthly: number;
+    plan_start_date: string | null;
+  }
+
+  const planData = planRequest as unknown as PlanRequestRow;
+
   return NextResponse.json({
     ok: true,
-    requestCode: planRequest.request_code,
-    requestId: planRequest.id,
-    status: planRequest.status,
-    total: planRequest.total_price_monthly,
+    requestCode: planData.request_code,
+    requestId: planData.id,
+    status: planData.status,
+    total: planData.total_price_monthly,
+    planStartDate: planData.plan_start_date ?? null,
   });
 }

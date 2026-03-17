@@ -44,6 +44,8 @@ interface CartContextValue {
   items: CartItem[];
   total: number;
   loading: boolean;
+  cartId: string | null;
+  preferredStartDate: string | null;
   addItem: (
     item: Omit<CartItem, "id" | "sort_order">
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -62,6 +64,7 @@ interface CartContextValue {
       >
     >
   ) => Promise<void>;
+  updatePreferredStartDate: (date: string | null) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -70,6 +73,8 @@ const CartContext = createContext<CartContextValue | null>(null);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cartId, setCartId] = useState<string | null>(null);
+  const [preferredStartDate, setPreferredStartDate] = useState<string | null>(null);
 
   // Derived from items — always in sync, no separate state to manage or race conditions
   const total = useMemo(
@@ -84,6 +89,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setItems(data.items ?? []);
+        setCartId(data.cartId ?? null);
+        setPreferredStartDate(data.preferred_start_date ?? null);
         // total is derived from items via useMemo — no setTotal needed
       }
     } finally {
@@ -186,9 +193,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  /**
+   * Updates the preferred plan start date on the active cart.
+   * Optimistically updates local state; reverts if the PATCH fails.
+   */
+  const updatePreferredStartDate = useCallback(async (date: string | null) => {
+    const previousDate = preferredStartDate;
+    setPreferredStartDate(date);
+    try {
+      const res = await fetch("/api/cart", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferred_start_date: date }),
+      });
+      if (!res.ok) {
+        setPreferredStartDate(previousDate);
+      }
+    } catch {
+      setPreferredStartDate(previousDate);
+    }
+  }, [preferredStartDate]);
+
   return (
     <CartContext.Provider
-      value={{ items, total, loading, addItem, removeItem, updateItem, refresh }}
+      value={{ items, total, loading, cartId, preferredStartDate, addItem, removeItem, updateItem, updatePreferredStartDate, refresh }}
     >
       {children}
     </CartContext.Provider>

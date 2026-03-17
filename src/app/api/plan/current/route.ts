@@ -12,7 +12,7 @@ export async function GET() {
   const { data: planRequest, error } = await supabaseAdmin
     .from("plan_requests")
     .select(
-      `id, request_code, status, total_price_monthly, created_at, updated_at,
+      `id, request_code, status, total_price_monthly, plan_start_date, created_at, updated_at,
        plan_request_items(
          id, category_id, job_id, job_code, title,
          frequency_label, unit_type, unit_value, minutes,
