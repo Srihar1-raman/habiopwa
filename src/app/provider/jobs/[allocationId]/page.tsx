@@ -99,7 +99,7 @@ export default function JobDetailPage() {
         : [today, addDays(today, -1), addDays(today, 1)];
 
       for (const d of datesToTry) {
-        const endpoint = d === today ? "/api/provider/jobs/today" : `/api/provider/jobs/${d}`;
+        const endpoint = d === today ? "/api/provider/jobs/today" : `/api/provider/jobs/by-date/${d}`;
         try {
           const res = await fetch(endpoint);
           if (!res.ok) {
