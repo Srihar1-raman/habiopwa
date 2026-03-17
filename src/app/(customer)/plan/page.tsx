@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { CartItem } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Pencil, CheckCircle, ShoppingCart } from "lucide-react";
+import { ChevronLeft, Pencil, CheckCircle, ShoppingCart, Zap, Wrench, Hammer } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatUnitValue } from "@/lib/pricing";
 
@@ -186,6 +186,40 @@ export default function PlanPage() {
             </div>
           );
         })}
+
+        {/* Technician Services — always shown, free 2x/month */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-3">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+            <div>
+              <p className="font-semibold text-gray-900">Technician Services</p>
+              <p className="text-xs text-gray-500">Included with your plan · Free</p>
+            </div>
+            <span className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-1 rounded-full">
+              Free
+            </span>
+          </div>
+          <div className="px-4 py-2">
+            {[
+              { name: "Electrician", Icon: Zap },
+              { name: "Plumber", Icon: Wrench },
+              { name: "Carpenter", Icon: Hammer },
+            ].map(({ name, Icon }) => (
+              <div
+                key={name}
+                className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="w-4 h-4 text-[#004aad]" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{name}</p>
+                    <p className="text-xs text-gray-500">Free · 2 times / month</p>
+                  </div>
+                </div>
+                <p className="text-sm font-semibold text-green-600">₹0 / m</p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       </div>
