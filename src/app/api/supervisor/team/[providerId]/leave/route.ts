@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ providerId: string }> }
+) {
+  const { providerId } = await params;
+  const body = await req.json();
+  const { leave_start_date, leave_end_date, leave_type } = body;
+
+  if (!leave_start_date || !leave_end_date || !leave_type) {
+    return NextResponse.json(
+      { error: "leave_start_date, leave_end_date, and leave_type are required" },
+      { status: 400 }
+    );
+  }
+
+  const { data: leave, error } = await supabaseAdmin
+    .from("provider_leave_requests")
+    .insert({
+      service_provider_id: providerId,
+      leave_start_date,
+      leave_end_date,
+      leave_type,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, leave });
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ providerId: string }> }
+) {
+  const { providerId } = await params;
+
+  const { data, error } = await supabaseAdmin
+    .from("provider_leave_requests")
+    .select("*")
+    .eq("service_provider_id", providerId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ leaves: data ?? [] });
+}
