@@ -4,6 +4,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
 } from "react";
@@ -68,8 +69,13 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // Derived from items — always in sync, no separate state to manage or race conditions
+  const total = useMemo(
+    () => items.reduce((sum, i) => sum + Number(i.unit_price_monthly), 0),
+    [items]
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -78,7 +84,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setItems(data.items ?? []);
-        setTotal(data.total ?? 0);
+        // total is derived from items via useMemo — no setTotal needed
       }
     } finally {
       setLoading(false);
@@ -89,39 +95,70 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
+  /**
+   * Optimistically adds an item to the cart.
+   * The item appears instantly in the UI via a temporary ID; the temp ID is
+   * replaced with the real server ID once the POST succeeds.  If the request
+   * fails the optimistic item is rolled back and an error is returned.
+   */
   const addItem = useCallback(
     async (
       item: Omit<CartItem, "id" | "sort_order">
     ): Promise<{ ok: boolean; error?: string }> => {
-      const res = await fetch("/api/cart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item),
-      });
-      if (res.ok) {
-        await refresh();
-        return { ok: true };
-      }
-      const data = await res.json().catch(() => ({ error: "Server error" }));
-      return { ok: false, error: data.error ?? "Failed to add item" };
-    },
-    [refresh]
-  );
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticItem: CartItem = { ...item, id: optimisticId, sort_order: 9999 };
 
-  const removeItem = useCallback(
-    async (id: string) => {
-      const res = await fetch(`/api/cart/items/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => i.id !== id));
-        setTotal((prev) => {
-          const item = items.find((i) => i.id === id);
-          return item ? prev - item.unit_price_monthly : prev;
+      // Show the item immediately — total updates automatically via useMemo
+      setItems((prev) => [...prev, optimisticItem]);
+
+      try {
+        const res = await fetch("/api/cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item),
         });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          const serverItem = data.item as { id: string; sort_order: number };
+          // Swap the temp ID for the real server ID
+          setItems((prev) =>
+            prev.map((i) =>
+              i.id === optimisticId
+                ? { ...optimisticItem, id: serverItem.id, sort_order: serverItem.sort_order ?? 9999 }
+                : i
+            )
+          );
+          return { ok: true };
+        }
+
+        // Server rejected — roll back
+        setItems((prev) => prev.filter((i) => i.id !== optimisticId));
+        return { ok: false, error: data.error ?? "Failed to add item" };
+      } catch {
+        // Network error — roll back
+        setItems((prev) => prev.filter((i) => i.id !== optimisticId));
+        return { ok: false, error: "Network error. Please try again." };
       }
     },
-    [items]
+    []
   );
 
+  /**
+   * Optimistically removes an item.  The item disappears instantly; the DELETE
+   * fires in the background.  Total updates automatically via useMemo.
+   */
+  const removeItem = useCallback(async (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    await fetch(`/api/cart/items/${id}`, { method: "DELETE" });
+  }, []);
+
+  /**
+   * Optimistically updates an item's unit/pricing fields.
+   * Local state is updated immediately; the PATCH fires in the background.
+   * Total updates automatically via useMemo.
+   */
   const updateItem = useCallback(
     async (
       id: string,
@@ -137,16 +174,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         >
       >
     ) => {
-      const res = await fetch(`/api/cart/items/${id}`, {
+      // Apply update locally — total recomputes via useMemo
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...data } : i)));
+
+      await fetch(`/api/cart/items/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (res.ok) {
-        await refresh();
-      }
     },
-    [refresh]
+    []
   );
 
   return (

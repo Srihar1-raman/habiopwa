@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { CartCapsule } from "@/components/CartCapsule";
@@ -128,9 +128,10 @@ export default function CategoryPlanPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [unitValues, setUnitValues] = useState<Record<string, number>>({});
-  const [hasBasePlan, setHasBasePlan] = useState(false);
   const [cartError, setCartError] = useState<string | null>(null);
   const [lockedToast, setLockedToast] = useState(false);
+  // Track which job IDs are currently being toggled to prevent double-clicks
+  const [toggling, setToggling] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/catalog")
@@ -157,11 +158,10 @@ export default function CategoryPlanPage() {
       });
   }, [categorySlug]);
 
-  // Detect whether the customer has at least one non-on-demand (base plan) job in the cart.
-  // Uses the `is_on_demand` field from the service_jobs catalog join — 100% driven by catalog data.
-  // Falls back to job_code pattern matching only for legacy items without a catalog link.
-  useEffect(() => {
-    setHasBasePlan(
+  // Detect whether the customer has at least one non-on-demand (base plan) job in
+  // the cart.  Derived directly from `items` — no extra state or effect needed.
+  const hasBasePlan = useMemo(
+    () =>
       items.some((i) => {
         // Primary: use is_on_demand from the catalog join
         if (i.service_jobs != null) {
@@ -169,9 +169,9 @@ export default function CategoryPlanPage() {
         }
         // Fallback for custom items without a catalog job link
         return i.job_code !== null && !i.job_code.includes("-OD-OD-");
-      })
-    );
-  }, [items]);
+      }),
+    [items]
+  );
 
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
@@ -191,10 +191,19 @@ export default function CategoryPlanPage() {
   }
 
   async function toggleJob(job: Job) {
+    // Prevent double-clicks while a toggle is in flight
+    if (toggling.has(job.id)) return;
+
     setCartError(null);
     const cartItem = getCartItem(job.id);
     if (cartItem) {
+      setToggling((prev) => new Set([...prev, job.id]));
       await removeItem(cartItem.id);
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(job.id);
+        return next;
+      });
       return;
     }
 
@@ -210,6 +219,7 @@ export default function CategoryPlanPage() {
     const inputValue = unitValues[job.id] ?? job.default_unit;
     const { base, effective } = computePrices(job, inputValue);
 
+    setToggling((prev) => new Set([...prev, job.id]));
     const result = await addItem({
       category_id: category.id,
       job_id: job.id,
@@ -235,6 +245,11 @@ export default function CategoryPlanPage() {
         code: job.code,
         is_on_demand: job.is_on_demand,
       },
+    });
+    setToggling((prev) => {
+      const next = new Set(prev);
+      next.delete(job.id);
+      return next;
     });
 
     if (!result.ok) {
@@ -341,6 +356,7 @@ export default function CategoryPlanPage() {
                 const inputValue = unitValues[job.id] ?? job.default_unit;
                 const { base, effective } = computePrices(job, inputValue);
                 const isLocked = job.is_on_demand && !hasBasePlan;
+                const isToggling = toggling.has(job.id);
 
                 return (
                   <div
@@ -357,13 +373,14 @@ export default function CategoryPlanPage() {
                     <div className="flex items-center gap-3 p-4">
                       <button
                         onClick={() => toggleJob(job)}
+                        disabled={isToggling}
                         className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                           inCart
                             ? "bg-[#004aad] border-[#004aad]"
                             : isLocked
                             ? "border-gray-200 bg-gray-50"
                             : "border-gray-300"
-                        }`}
+                        } disabled:opacity-50`}
                       >
                         {inCart && <Check className="w-3.5 h-3.5 text-white" />}
                         {isLocked && !inCart && (
@@ -477,9 +494,10 @@ export default function CategoryPlanPage() {
                         {!inCart && !isLocked && (
                           <button
                             onClick={() => toggleJob(job)}
-                            className="w-full py-3 rounded-xl bg-[#004aad] text-white font-semibold text-sm"
+                            disabled={isToggling}
+                            className="w-full py-3 rounded-xl bg-[#004aad] text-white font-semibold text-sm disabled:opacity-60"
                           >
-                            Add to Plan
+                            {isToggling ? "Adding…" : "Add to Plan"}
                           </button>
                         )}
 

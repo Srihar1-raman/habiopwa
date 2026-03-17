@@ -60,5 +60,14 @@ export async function GET() {
     return { ...job, compound_child: null };
   });
 
-  return NextResponse.json({ categories, jobs: jobsWithChildren });
+  return NextResponse.json(
+    { categories, jobs: jobsWithChildren },
+    {
+      headers: {
+        // Cache the catalog in the browser for 5 minutes; allow serving stale
+        // data while revalidating in the background for up to 1 minute after.
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=60",
+      },
+    }
+  );
 }
