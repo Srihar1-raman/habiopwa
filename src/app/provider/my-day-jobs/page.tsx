@@ -112,7 +112,7 @@ export default function MyDayJobsPage() {
     try {
       const endpoint = d === todayStr
         ? "/api/provider/jobs/today"
-        : `/api/provider/jobs/${d}`;
+        : `/api/provider/jobs/by-date/${d}`;
       const res = await fetch(endpoint);
       const data = await res.json();
       setJobs(data.jobs ?? []);
