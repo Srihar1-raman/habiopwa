@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "./supabase";
 
-const SESSION_COOKIE = "habio_provider_session";
+export const PROVIDER_SESSION_COOKIE = "habio_provider_session";
 const SESSION_TTL_DAYS = 30;
 
 export async function createProviderSession(providerId: string): Promise<string> {
@@ -67,13 +67,13 @@ export async function getProviderFromRequest(): Promise<{
   status: string | null;
 } | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = cookieStore.get(PROVIDER_SESSION_COOKIE)?.value;
   return getProviderFromSession(token);
 }
 
 export function getProviderSessionCookieOptions(token: string) {
   return {
-    name: SESSION_COOKIE,
+    name: PROVIDER_SESSION_COOKIE,
     value: token,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -85,7 +85,7 @@ export function getProviderSessionCookieOptions(token: string) {
 
 export function clearProviderSessionCookieOptions() {
   return {
-    name: SESSION_COOKIE,
+    name: PROVIDER_SESSION_COOKIE,
     value: "",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

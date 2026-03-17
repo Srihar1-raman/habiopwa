@@ -643,3 +643,23 @@ INSERT INTO job_expectations (job_id, sort_order, text) VALUES
 ('55000000-0000-0000-0000-000000000005', 1, 'AC filter cleaning and general service'),
 ('55000000-0000-0000-0000-000000000005', 2, 'Refrigerant check and leak inspection'),
 ('55000000-0000-0000-0000-000000000005', 3, 'Performance test and maintenance recommendations');
+
+-- =====================================================================
+-- SERVICE PROVIDER SEED DATA
+-- Run AFTER schema.sql (new tables must exist).
+-- Uses stable UUIDs so this section is safe to re-run (upsert pattern).
+-- =====================================================================
+
+INSERT INTO service_providers (id, phone, name, specialization, is_active, status) VALUES
+  ('sp000000-0000-0000-0000-000000000001', '+919900000001', 'Ravi Kumar',    'Housekeeping',  true, 'available'),
+  ('sp000000-0000-0000-0000-000000000002', '+919900000002', 'Sunita Devi',   'Cooking',        true, 'available'),
+  ('sp000000-0000-0000-0000-000000000003', '+919900000003', 'Arjun Sharma',  'Electrician',    true, 'available'),
+  ('sp000000-0000-0000-0000-000000000004', '+919900000004', 'Mohan Singh',   'Plumber',        true, 'available'),
+  ('sp000000-0000-0000-0000-000000000005', '+919900000005', 'Priya Nair',    'Housekeeping',   true, 'available'),
+  ('sp000000-0000-0000-0000-000000000006', '+919900000006', 'Ramesh Gupta',  'Carpenter',      true, 'available'),
+  ('sp000000-0000-0000-0000-000000000007', '+919900000007', 'Deepa Kumari',  'Car Care',       true, 'available')
+ON CONFLICT (id) DO UPDATE SET
+  name           = EXCLUDED.name,
+  specialization = EXCLUDED.specialization,
+  is_active      = EXCLUDED.is_active,
+  status         = EXCLUDED.status;
