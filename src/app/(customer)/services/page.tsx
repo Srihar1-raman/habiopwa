@@ -300,6 +300,12 @@ export default function ServicesHomePage() {
   }, []);
 
   function getCartCountForCategory(categoryId: string) {
+    if (planRequest != null) {
+      // For users with an existing plan, show counts from plan items
+      return (planRequest.plan_request_items ?? []).filter(
+        (i) => i.category_id === categoryId
+      ).length;
+    }
     return items.filter((i) => i.category_id === categoryId).length;
   }
 
@@ -312,19 +318,11 @@ export default function ServicesHomePage() {
     );
   }
 
-  // Active plan (not paid) — show plan summary
-  if (planRequest !== null) {
-    return (
-      <PlanSummaryView
-        planRequest={planRequest}
-        onPay={() => router.push("/payment")}
-      />
-    );
-  }
-
-  // No plan — show service selection UI
+  // All states — show the service selection homepage
   const banner = BANNERS[activeBanner];
   const { Icon: BannerIcon } = banner;
+  const isFinalized = planRequest?.status === "finalized";
+  const isUnderReview = planRequest && !isFinalized;
 
   return (
     <div className="flex flex-col min-h-dvh pb-28">
@@ -347,8 +345,44 @@ export default function ServicesHomePage() {
         </div>
       </div>
 
+      {/* Plan status banner — shown when user has a pending/finalized plan */}
+      {isFinalized && (
+        <div className="mx-4 mt-3 bg-green-50 border border-green-200 rounded-2xl p-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold text-green-800 text-sm">Plan Ready for Payment</p>
+              <p className="text-xs text-green-600 truncate">{planRequest?.request_code}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push("/payment")}
+            className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-xl whitespace-nowrap flex-shrink-0"
+          >
+            Pay Now
+          </button>
+        </div>
+      )}
+      {isUnderReview && (
+        <div className="mx-4 mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-800 text-sm">Plan Under Review</p>
+              <p className="text-xs text-amber-600 truncate">{planRequest?.request_code}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push("/plan")}
+            className="text-xs text-amber-700 font-semibold underline whitespace-nowrap flex-shrink-0"
+          >
+            View Plan
+          </button>
+        </div>
+      )}
+
       {/* Auto-swiping banner — positioned immediately below logo */}
-      <div className="px-4 mt-2">
+      <div className="px-4 mt-3">
         <div
           className={`${banner.bg} rounded-2xl px-5 py-8 text-white transition-all duration-500`}
         >
@@ -373,7 +407,10 @@ export default function ServicesHomePage() {
 
       {/* Category Cards */}
       <div className="px-4 mt-6">
-        <h2 className="text-base font-semibold text-gray-900 mb-0.5">Customize your Plan</h2>
+        <h2 className="text-base font-semibold text-gray-900 mb-0.5">
+          {planRequest ? "Browse Services" : "Customize your Plan"}
+        </h2>
+        {!planRequest && (
         <div className="flex items-center gap-1.5 mb-3">
           <p className="text-sm text-gray-500">
             Plan Start Date:{" "}
@@ -389,9 +426,10 @@ export default function ServicesHomePage() {
             <CalendarDays className="w-4 h-4" />
           </button>
         </div>
+        )}
 
         {/* Date picker popover */}
-        {showDatePicker && (
+        {!planRequest && showDatePicker && (
           <div className="mb-3 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Choose Start Date
@@ -413,9 +451,32 @@ export default function ServicesHomePage() {
             />
           </div>
         )}
+        {planRequest && <div className="mb-3" />}
         <div className="flex flex-col gap-3">
           {categories.map((cat) => {
             const count = getCartCountForCategory(cat.id);
+            const countLabel = planRequest
+              ? count === 0
+                ? "No services in plan"
+                : `${count} service${count !== 1 ? "s" : ""} in plan`
+              : count === 0
+              ? "0 services added"
+              : `${count} job${count !== 1 ? "s" : ""} in cart`;
+            const valueLabel = planRequest
+              ? (() => {
+                  const planItems = (planRequest.plan_request_items ?? []).filter(
+                    (i) => i.category_id === cat.id
+                  );
+                  const total = planItems.reduce((s, i) => s + i.price_monthly, 0);
+                  return total > 0 ? `${formatCurrency(total)} / m` : null;
+                })()
+              : count > 0
+              ? `${formatCurrency(
+                  items
+                    .filter((i) => i.category_id === cat.id)
+                    .reduce((s, i) => s + i.unit_price_monthly, 0)
+                )} / m`
+              : null;
             return (
               <button
                 key={cat.id}
@@ -428,20 +489,9 @@ export default function ServicesHomePage() {
                   </div>
                   <div className="text-left">
                     <p className="font-semibold text-gray-900">{cat.name}</p>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      {count === 0
-                        ? "0 services added"
-                        : `${count} job${count !== 1 ? "s" : ""} in cart`}
-                    </p>
-                    {count > 0 && (
-                      <p className="text-xs text-[#004aad] font-medium mt-0.5">
-                        {formatCurrency(
-                          items
-                            .filter((i) => i.category_id === cat.id)
-                            .reduce((s, i) => s + i.unit_price_monthly, 0)
-                        )}{" "}
-                        / m
-                      </p>
+                    <p className="text-sm text-gray-500 mt-0.5">{countLabel}</p>
+                    {valueLabel && (
+                      <p className="text-xs text-[#004aad] font-medium mt-0.5">{valueLabel}</p>
                     )}
                   </div>
                 </div>
@@ -464,7 +514,7 @@ export default function ServicesHomePage() {
         </div>
       </div>
 
-      <CartCapsule />
+      {!planRequest && <CartCapsule />}
     </div>
   );
 }

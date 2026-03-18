@@ -190,7 +190,7 @@ export default function PlanActivePage() {
   const reallocatedJobs = todayJobs.filter((j) => j.status === "reallocated");
 
   return (
-    <div className="flex flex-col min-h-dvh pb-10 bg-gray-50">
+    <div className="flex flex-col min-h-dvh pb-10">
       {/* App bar */}
       <div className="px-4 pt-12 pb-4 bg-white">
         <div className="flex items-center justify-between">
