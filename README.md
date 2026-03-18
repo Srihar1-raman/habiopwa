@@ -226,21 +226,73 @@ On-demand jobs show a per-use price (`instances_per_month = 1`) and are included
 
 ## Reseed / Catalog Update Instructions
 
-1. **Full reset** — run this in Supabase SQL editor to wipe all catalog and transactional data:
+1. **Full reset** — `supabase/seed.sql` now handles this automatically. Running the seed will
+   `DELETE` all catalog data, service provider data, customer sessions, customers, and job data
+   before re-inserting. You can also do a manual hard reset if needed:
    ```sql
    truncate table
+     issue_comments, issue_tickets, on_demand_requests, pause_requests,
+     job_allocations, provider_leave_requests, tech_services_allowance,
      payments, plan_request_events, plan_request_items, plan_requests,
      cart_items, carts, customer_sessions, customer_profiles, customers,
+     provider_sessions, service_providers,
      job_expectations, job_pricing, service_jobs, service_categories
    restart identity cascade;
    ```
 2. Run `supabase/schema.sql` (safe to re-run; uses `CREATE TABLE IF NOT EXISTS`).
-3. Run `supabase/seed.sql` to insert the full catalog from masterdata.xlsx.
+3. Run `supabase/seed.sql` to populate catalog + demo users.
 
 To update the catalog from a new version of the Excel sheet:
 1. Update `supabase/seed.sql` with the new values using the same UUID scheme and field mapping.
 2. Run the seed SQL (it issues `DELETE` at the top before inserting).
 3. Code changes are only needed if a **new `unit_type`** or **new `formula_type`** is introduced; update `src/lib/pricing.ts` accordingly.
+
+---
+
+## Demo Users (Seed Data)
+
+`supabase/seed.sql` seeds **2 active customers** with a full 3-week history of jobs so you can
+test every flow immediately after seeding.
+
+### Seed Credentials
+
+| Role | Name | Phone | OTP |
+|------|------|-------|-----|
+| Customer | Ananya Sharma | `+919800000001` | `123456` |
+| Customer | Vikram Patel | `+919800000002` | `123456` |
+| Provider | Ravi Kumar (HKP) | `+919900000001` | `123456` |
+| Provider | Sunita Devi (Cook) | `+919900000002` | `123456` |
+| Provider | Priya Nair (HKP) | `+919900000005` | `123456` |
+| Provider | Deepa Kumari (Cars) | `+919900000007` | `123456` |
+
+### What's Seeded
+
+**Ananya Sharma** — plan active since 26 Feb 2026 (∼3 weeks)
+- Housekeeping: 45 min/day @ ₹3,118.50/mo — Ravi Kumar (07:00–07:45)
+- Daily Cooking Morning: 60 min/day @ ₹5,040/mo — Sunita Devi (08:30–09:30)
+- **Mar 11–17**: all jobs completed (with 1 `service_incomplete` on Mar 16 cooking, cook left early)
+- **Mar 18 (today)**: HKP = `ongoing`, Cooking = `scheduled`
+- **Mar 19–25**: all `scheduled` (HKP on Mar 24 = `service_on_pause` — 1-day approved pause)
+- Approved 1-day pause request (Mar 24) already in `pause_requests`
+
+**Vikram Patel** — plan active since 2 Mar 2026 (∼2.5 weeks)
+- Housekeeping: 30 min/day @ ₹2,079/mo — Priya Nair (08:00–08:30)
+- Basic Car Care (1 car): 15 min/day @ ₹1,178.10/mo — Deepa Kumari (07:00–07:15)
+- **Mar 11–17**: mostly completed (1 `completed_delayed` on Mar 15 HKP, 1 `cancelled_by_customer` on Mar 16 car care)
+- **Mar 18 (today)**: both `scheduled`
+- **Mar 19–25**: all `scheduled`
+
+### Service Providers (all seeded)
+
+| ID suffix | Name | Specialization | Phone |
+|-----------|------|----------------|-------|
+| …001 | Ravi Kumar | Housekeeping | +919900000001 |
+| …002 | Sunita Devi | Cooking | +919900000002 |
+| …003 | Arjun Sharma | Electrician | +919900000003 |
+| …004 | Mohan Singh | Plumber | +919900000004 |
+| …005 | Priya Nair | Housekeeping | +919900000005 |
+| …006 | Ramesh Gupta | Carpenter | +919900000006 |
+| …007 | Deepa Kumari | Car Care | +919900000007 |
 
 ---
 
@@ -287,4 +339,9 @@ SELECT
 FROM service_jobs j
 JOIN service_jobs c ON c.code = j.compound_child_code
 WHERE j.code = 'CCR-CR-D-1A';
+
+-- 8. Seed user check (expect 2 customers, 2 paid plans, 60 job allocations)
+SELECT count(*) AS customers FROM customers;
+SELECT status, count(*) FROM plan_requests GROUP BY status;
+SELECT status, count(*) FROM job_allocations GROUP BY status ORDER BY count DESC;
 ```
