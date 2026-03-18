@@ -102,8 +102,8 @@ export default function ProfilePage() {
 
   async function handleSignOut() {
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
-    document.cookie = "habio_session=; Max-Age=0; path=/";
-    router.push("/login");
+    // Use a hard navigation so the server-cleared httpOnly cookie is respected
+    window.location.href = "/login";
   }
 
   if (loading) {

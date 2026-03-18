@@ -11,6 +11,8 @@ import {
   Zap,
   AlertTriangle,
   BarChart3,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 
 function getLocalToday() {
@@ -81,25 +83,22 @@ const TILES: Tile[] = [
 
 const BANNERS = [
   {
-    bg: "bg-gradient-to-br from-[#004aad] to-[#0066ee]",
-    title: "Today's Operations",
-    getMetric: (counts: { households?: number; newRequests?: number }) =>
-      counts.households !== undefined ? `${counts.households} active households under management` : "Loading…",
+    bg: "bg-[#004aad]",
+    title: "Subscription Home Services",
+    sub: "Daily cleaning, cooking & more — on a schedule",
+    Icon: Home,
   },
   {
-    bg: "bg-gradient-to-br from-emerald-600 to-teal-500",
-    title: "Pending Review",
-    getMetric: (counts: { households?: number; newRequests?: number }) =>
-      counts.newRequests !== undefined
-        ? counts.newRequests > 0
-          ? `${counts.newRequests} new plan requests awaiting your action`
-          : "All requests up-to-date — no pending reviews"
-        : "Loading…",
+    bg: "bg-[#1a5fc9]",
+    title: "Flexible Plans",
+    sub: "Choose exactly what you need — change anytime",
+    Icon: Sparkles,
   },
   {
-    bg: "bg-gradient-to-br from-purple-600 to-indigo-600",
-    title: "Quick Tip",
-    getMetric: () => "Use Day Report to track completion rates and reassign delayed jobs quickly.",
+    bg: "bg-[#0057cc]",
+    title: "Verified Professionals",
+    sub: "Background-checked helpers for your home",
+    Icon: ShieldCheck,
   },
 ];
 
@@ -149,14 +148,13 @@ export default function SupervisorDashboardPage() {
       {/* Auto-rotating banner */}
       <div className="mb-5">
         <div
-          className={`${banner.bg} rounded-2xl px-5 py-5 text-white transition-all duration-500`}
+          className={`${banner.bg} rounded-2xl px-5 py-8 text-white transition-all duration-500`}
         >
-          <p className="text-xs font-semibold text-white/70 uppercase tracking-wide mb-1">
-            {banner.title}
-          </p>
-          <p className="text-base font-bold leading-snug">
-            {banner.getMetric(counts)}
-          </p>
+          <div className="mb-3">
+            <banner.Icon className="w-10 h-10 text-white/80" />
+          </div>
+          <h2 className="text-xl font-bold leading-snug">{banner.title}</h2>
+          <p className="text-sm text-blue-100 mt-1.5">{banner.sub}</p>
         </div>
         <div className="flex justify-center gap-1.5 mt-2">
           {BANNERS.map((_, i) => (

@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCustomerFromRequest } from "@/lib/session";
 
+export async function GET(_req: NextRequest) {
+  const customer = await getCustomerFromRequest();
+  if (!customer) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: requests, error } = await supabaseAdmin
+    .from("on_demand_requests")
+    .select("id, status, request_date, request_time_preference, customer_notes, created_at, service_jobs(name)")
+    .eq("customer_id", customer.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, requests: requests ?? [] });
+}
+
 export async function POST(req: NextRequest) {
   const customer = await getCustomerFromRequest();
   if (!customer) {
