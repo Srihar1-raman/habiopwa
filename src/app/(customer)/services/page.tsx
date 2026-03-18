@@ -480,7 +480,11 @@ export default function ServicesHomePage() {
             return (
               <button
                 key={cat.id}
-                onClick={() => router.push(`/services/${cat.slug}`)}
+                onClick={() =>
+                  isUnderReview && planRequest
+                    ? router.push(`/add-service/${cat.slug}?plan=${planRequest.id}`)
+                    : router.push(`/services/${cat.slug}`)
+                }
                 className="w-full flex items-center justify-between bg-white rounded-2xl p-4 border border-gray-100 shadow-sm active:scale-[0.98] transition-transform"
               >
                 <div className="flex items-center gap-4">

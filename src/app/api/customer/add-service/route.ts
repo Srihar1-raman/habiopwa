@@ -39,9 +39,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Plan not found" }, { status: 404 });
   }
 
-  if (plan.status !== "paid" && plan.status !== "finalized") {
+  const allowedStatuses = ["submitted", "under_process", "finalized", "paid"];
+  if (!allowedStatuses.includes(plan.status)) {
     return NextResponse.json(
-      { ok: false, error: "Plan must be paid or finalized to add services" },
+      { ok: false, error: "Plan is not in a state that allows adding services" },
       { status: 400 }
     );
   }
@@ -54,8 +55,8 @@ export async function POST(req: NextRequest) {
     frequency_label: item.frequency_label,
     unit_type: item.unit_type,
     unit_value: item.unit_value,
+    minutes: item.unit_value,
     price_monthly: item.price_monthly,
-    status: "pending_review",
   }));
 
   const { error: insertError } = await supabaseAdmin
