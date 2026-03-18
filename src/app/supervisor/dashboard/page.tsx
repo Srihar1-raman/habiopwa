@@ -24,7 +24,7 @@ interface Tile {
   label: string;
   icon: React.ReactNode;
   href: string;
-  countKey?: "households" | "newRequests";
+  countKey?: "households" | "newRequests" | "pauseRequests" | "onDemandRequests" | "issues";
   color: string;
 }
 
@@ -59,18 +59,21 @@ const TILES: Tile[] = [
     label: "Pause Requests",
     icon: <PauseCircle className="w-6 h-6" />,
     href: "/supervisor/pause-requests",
+    countKey: "pauseRequests",
     color: "text-yellow-600 bg-yellow-50",
   },
   {
     label: "On-Demand",
     icon: <Zap className="w-6 h-6" />,
     href: "/supervisor/on-demand-requests",
+    countKey: "onDemandRequests",
     color: "text-pink-600 bg-pink-50",
   },
   {
     label: "Issues",
     icon: <AlertTriangle className="w-6 h-6" />,
     href: "/supervisor/issues",
+    countKey: "issues",
     color: "text-red-600 bg-red-50",
   },
   {
@@ -104,7 +107,13 @@ const BANNERS = [
 
 export default function SupervisorDashboardPage() {
   const router = useRouter();
-  const [counts, setCounts] = useState<{ households?: number; newRequests?: number }>({});
+  const [counts, setCounts] = useState<{
+    households?: number;
+    newRequests?: number;
+    pauseRequests?: number;
+    onDemandRequests?: number;
+    issues?: number;
+  }>({});
   const [activeBanner, setActiveBanner] = useState(0);
   const bannerTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -124,6 +133,21 @@ export default function SupervisorDashboardPage() {
     fetch("/api/supervisor/new-requests")
       .then((r) => r.json())
       .then((d) => setCounts((prev) => ({ ...prev, newRequests: d.requests?.length ?? d.count ?? 0 })))
+      .catch(() => {});
+
+    fetch("/api/supervisor/pause-requests")
+      .then((r) => r.json())
+      .then((d) => setCounts((prev) => ({ ...prev, pauseRequests: d.pauseRequests?.length ?? 0 })))
+      .catch(() => {});
+
+    fetch("/api/supervisor/on-demand-requests")
+      .then((r) => r.json())
+      .then((d) => setCounts((prev) => ({ ...prev, onDemandRequests: d.requests?.length ?? 0 })))
+      .catch(() => {});
+
+    fetch("/api/supervisor/issues")
+      .then((r) => r.json())
+      .then((d) => setCounts((prev) => ({ ...prev, issues: d.issues?.length ?? 0 })))
       .catch(() => {});
   }, []);
 

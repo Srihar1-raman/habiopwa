@@ -47,6 +47,7 @@ function tomorrow(): string {
 export default function PauseRequestPage() {
   const router = useRouter();
   const [hasPlan, setHasPlan] = useState<boolean | null>(null);
+  const [planRequestId, setPlanRequestId] = useState<string | null>(null);
   const [pauseType, setPauseType] = useState<"single_job" | "entire_service">("entire_service");
   const [startDate, setStartDate] = useState(tomorrow());
   const [durationIndex, setDurationIndex] = useState(2);
@@ -62,7 +63,13 @@ export default function PauseRequestPage() {
   useEffect(() => {
     fetch("/api/plan/current")
       .then((r) => r.json())
-      .then((data) => setHasPlan(!!(data.plan)))
+      .then((data) => {
+        // API returns { planRequest: { id, status, ... } }
+        const pr = data.planRequest ?? null;
+        const active = !!(pr && pr.status === "paid");
+        setHasPlan(active);
+        if (active) setPlanRequestId(pr.id);
+      })
       .catch(() => setHasPlan(false));
 
     fetch("/api/customer/pause-request")
@@ -73,6 +80,10 @@ export default function PauseRequestPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!planRequestId) {
+      setError("Could not find your active plan. Please refresh and try again.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -80,8 +91,9 @@ export default function PauseRequestPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          plan_request_id: planRequestId,
           pause_type: pauseType,
-          start_date: startDate,
+          pause_start_date: startDate,
           pause_end_date: endDate,
           pause_duration_unit: selectedDuration.unit,
           pause_duration_value: selectedDuration.value,
