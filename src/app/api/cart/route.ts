@@ -11,8 +11,9 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { preferred_start_date } = body;
 
-  // Find active cart
-  const { data: cart } = await supabaseAdmin
+  // Find active cart — create one if it doesn't exist yet so the preferred
+  // start date can be saved even before the first item is added to the cart.
+  let { data: cart } = await supabaseAdmin
     .from("carts")
     .select("id")
     .eq("customer_id", customer.id)
@@ -20,7 +21,16 @@ export async function PATCH(req: NextRequest) {
     .maybeSingle();
 
   if (!cart) {
-    return NextResponse.json({ error: "No active cart" }, { status: 404 });
+    const { data: newCart, error: createError } = await supabaseAdmin
+      .from("carts")
+      .insert({ customer_id: customer.id, status: "active" })
+      .select("id")
+      .single();
+
+    if (createError || !newCart) {
+      return NextResponse.json({ error: "Failed to create cart" }, { status: 500 });
+    }
+    cart = newCart;
   }
 
   const { error } = await supabaseAdmin

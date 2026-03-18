@@ -3,14 +3,41 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Plus, CheckCircle2 } from "lucide-react";
+import { calcJobPrices, type JobPricingParams, type CompoundChildParams } from "@/lib/pricing";
+import { formatCurrency } from "@/lib/utils";
 
-interface PlanItem {
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CatalogJob {
   id: string;
+  category_id: string;
+  name: string;
+  frequency_label: string;
+  unit_type: string;
+  default_unit: number;
+  base_rate_per_unit: number;
+  instances_per_month: number;
+  discount_pct: number;
+  time_multiple: number | null;
+  formula_type: string;
+  compound_child: {
+    base_rate_per_unit: number;
+    instances_per_month: number;
+    time_multiple: number | null;
+  } | null;
+}
+
+interface DisplayItem {
+  id: string;
+  category_id: string;
+  category_name: string;
   title: string;
   frequency_label: string;
-  category_id: string;
+  unit_type: string;
+  unit_value: number;
   price_monthly: number;
-  service_categories?: { name: string } | null;
 }
 
 interface CurrentPlan {
@@ -18,11 +45,41 @@ interface CurrentPlan {
   status: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function computePrice(job: CatalogJob): number {
+  const params: JobPricingParams = {
+    formula_type: job.formula_type,
+    unit_type: job.unit_type,
+    base_rate_per_unit: Number(job.base_rate_per_unit),
+    instances_per_month: job.instances_per_month,
+    discount_pct: Number(job.discount_pct),
+    time_multiple: job.time_multiple ? Number(job.time_multiple) : null,
+  };
+  const child: CompoundChildParams | undefined = job.compound_child
+    ? {
+        base_rate_per_unit: Number(job.compound_child.base_rate_per_unit),
+        instances_per_month: job.compound_child.instances_per_month,
+        time_multiple: job.compound_child.time_multiple
+          ? Number(job.compound_child.time_multiple)
+          : null,
+      }
+    : undefined;
+  return calcJobPrices(job.default_unit, params, child).effective;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function AddServicePage() {
   const router = useRouter();
   const [plan, setPlan] = useState<CurrentPlan | null>(null);
+  const [planRequestId, setPlanRequestId] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(true);
-  const [catalog, setCatalog] = useState<PlanItem[]>([]);
+  const [catalog, setCatalog] = useState<DisplayItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -32,14 +89,43 @@ export default function AddServicePage() {
     fetch("/api/plan/current")
       .then((r) => r.json())
       .then((data) => {
-        setPlan(data.plan ?? null);
+        // API returns { planRequest: { id, status, ... } }
+        const planRequest = data.planRequest ?? null;
+        if (planRequest && (planRequest.status === "paid" || planRequest.status === "finalized")) {
+          setPlan({ id: planRequest.id, status: planRequest.status });
+          setPlanRequestId(planRequest.id);
+        }
         setPlanLoading(false);
       })
       .catch(() => setPlanLoading(false));
 
     fetch("/api/catalog")
       .then((r) => r.json())
-      .then((data) => setCatalog(data.items ?? data ?? []))
+      .then((data) => {
+        const jobs: CatalogJob[] = data.jobs ?? [];
+        const categories: { id: string; name: string }[] = data.categories ?? [];
+
+        // Build a category name lookup
+        const catNameById: Record<string, string> = {};
+        categories.forEach((c) => { catNameById[c.id] = c.name; });
+
+        // Map jobs to display items, skipping compound_child rows (they are
+        // priced as part of their compound_head parent and not shown separately)
+        const items: DisplayItem[] = jobs
+          .filter((j) => j.formula_type !== "compound_child")
+          .map((j) => ({
+            id: j.id,
+            category_id: j.category_id,
+            category_name: catNameById[j.category_id] ?? "Other",
+            title: j.name,
+            frequency_label: j.frequency_label,
+            unit_type: j.unit_type,
+            unit_value: j.default_unit,
+            price_monthly: computePrice(j),
+          }));
+
+        setCatalog(items);
+      })
       .catch(() => {});
   }, []);
 
@@ -52,27 +138,45 @@ export default function AddServicePage() {
   }
 
   async function handleSubmit() {
-    if (selected.size === 0) return;
+    if (selected.size === 0 || !planRequestId) return;
     setSubmitting(true);
     setError(null);
     try {
+      // Build the items array matching what /api/customer/add-service expects
+      const items = Array.from(selected)
+        .map((id) => catalog.find((c) => c.id === id))
+        .filter((item): item is DisplayItem => item !== undefined)
+        .map((item) => ({
+          job_id: item.id,
+          category_id: item.category_id,
+          title: item.title,
+          frequency_label: item.frequency_label,
+          unit_type: item.unit_type,
+          unit_value: item.unit_value,
+          price_monthly: item.price_monthly,
+        }));
+
       const res = await fetch("/api/customer/add-service", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds: Array.from(selected) }),
+        body: JSON.stringify({ plan_request_id: planRequestId, items }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed");
+      }
       setSuccess(true);
       setSelected(new Set());
-    } catch {
-      setError("Could not submit request. Please try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not submit request. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const grouped = catalog.reduce<Record<string, PlanItem[]>>((acc, item) => {
-    const cat = item.service_categories?.name ?? "Other";
+  // Group catalog items by category name
+  const grouped = catalog.reduce<Record<string, DisplayItem[]>>((acc, item) => {
+    const cat = item.category_name;
     (acc[cat] = acc[cat] ?? []).push(item);
     return acc;
   }, {});
@@ -154,7 +258,7 @@ export default function AddServicePage() {
                         </div>
                         {item.price_monthly > 0 && (
                           <p className="text-sm font-semibold text-[#004aad] shrink-0">
-                            ₹{item.price_monthly}/mo
+                            {formatCurrency(item.price_monthly)}/mo
                           </p>
                         )}
                       </button>
