@@ -233,6 +233,49 @@ export default function PlanActivePage() {
         </div>
       </div>
 
+      {/* Quick Actions */}
+      <div className="px-4 mt-5">
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => router.push("/on-demand")}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
+          >
+            <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
+              <Zap className="w-5 h-5 text-pink-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-800">On-Demand Job</p>
+          </button>
+          <button
+            onClick={() => router.push("/pause-request")}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
+          >
+            <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center">
+              <PauseCircle className="w-5 h-5 text-yellow-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-800">Pause Plan</p>
+          </button>
+          <button
+            onClick={() => router.push("/add-service")}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
+          >
+            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Plus className="w-5 h-5 text-blue-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-800">Add Service</p>
+          </button>
+          <button
+            onClick={() => router.push("/issues")}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
+          >
+            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-800">Raise Issue</p>
+          </button>
+        </div>
+      </div>
+
       {/* Today's Jobs */}
       <div className="px-4 mt-5">
         <h2 className="text-base font-semibold text-gray-900 mb-3">Today&apos;s Jobs</h2>
@@ -325,49 +368,6 @@ export default function PlanActivePage() {
           </div>
         </div>
       )}
-
-      {/* Quick Actions */}
-      <div className="px-4 mt-5">
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => router.push("/on-demand")}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
-          >
-            <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
-              <Zap className="w-5 h-5 text-pink-600" />
-            </div>
-            <p className="text-sm font-semibold text-gray-800">On-Demand Job</p>
-          </button>
-          <button
-            onClick={() => router.push("/pause-request")}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
-          >
-            <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center">
-              <PauseCircle className="w-5 h-5 text-yellow-600" />
-            </div>
-            <p className="text-sm font-semibold text-gray-800">Pause Plan</p>
-          </button>
-          <button
-            onClick={() => router.push("/add-service")}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-              <Plus className="w-5 h-5 text-blue-600" />
-            </div>
-            <p className="text-sm font-semibold text-gray-800">Add Service</p>
-          </button>
-          <button
-            onClick={() => router.push("/issues")}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
-          >
-            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-            </div>
-            <p className="text-sm font-semibold text-gray-800">Raise Issue</p>
-          </button>
-        </div>
-      </div>
 
       {/* Active Plan Summary */}
       <div className="px-4 mt-5">
