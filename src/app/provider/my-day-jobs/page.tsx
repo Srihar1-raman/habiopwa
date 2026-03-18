@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, User, Home, Sparkles, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 interface PlanRequestItem {
@@ -61,6 +61,27 @@ const STATUS_STYLES: Record<string, string> = {
   status_not_marked: "bg-gray-500 text-white",
 };
 
+const BANNERS = [
+  {
+    bg: "bg-[#004aad]",
+    title: "Subscription Home Services",
+    sub: "Daily cleaning, cooking & more — on a schedule",
+    Icon: Home,
+  },
+  {
+    bg: "bg-[#1a5fc9]",
+    title: "Flexible Plans",
+    sub: "Choose exactly what you need — change anytime",
+    Icon: Sparkles,
+  },
+  {
+    bg: "bg-[#0057cc]",
+    title: "Verified Professionals",
+    sub: "Background-checked helpers for your home",
+    Icon: ShieldCheck,
+  },
+];
+
 function formatStatus(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -100,6 +121,16 @@ export default function MyDayJobsPage() {
   const [date, setDate] = useState<string>("");
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [activeBanner, setActiveBanner] = useState(0);
+  const bannerTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-rotate banners every 4 seconds
+  useEffect(() => {
+    bannerTimer.current = setInterval(() => {
+      setActiveBanner((b) => (b + 1) % BANNERS.length);
+    }, 4000);
+    return () => { if (bannerTimer.current) clearInterval(bannerTimer.current); };
+  }, []);
 
   // Compute today's local date string (YYYY-MM-DD) on the client only
   function getLocalToday(): string {
@@ -158,6 +189,7 @@ export default function MyDayJobsPage() {
   }
 
   const isToday = date === getLocalToday();
+  const banner = BANNERS[activeBanner];
 
   return (
     <div className="flex flex-col flex-1">
@@ -171,6 +203,29 @@ export default function MyDayJobsPage() {
         </div>
         <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
           <User className="w-5 h-5 text-white" />
+        </div>
+      </div>
+
+      {/* Auto-rotating Banner */}
+      <div className="px-4 pt-4 pb-2 bg-white">
+        <div
+          className={`${banner.bg} rounded-2xl px-5 py-8 text-white transition-all duration-500`}
+        >
+          <div className="mb-3">
+            <banner.Icon className="w-10 h-10 text-white/80" />
+          </div>
+          <h2 className="text-xl font-bold leading-snug">{banner.title}</h2>
+          <p className="text-sm text-blue-100 mt-1.5">{banner.sub}</p>
+        </div>
+        <div className="flex justify-center gap-1.5 mt-3">
+          {BANNERS.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === activeBanner ? "bg-[#004aad] w-5" : "bg-gray-300 w-1.5"
+              }`}
+            />
+          ))}
         </div>
       </div>
 
