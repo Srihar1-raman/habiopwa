@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
@@ -13,7 +13,10 @@ import {
   BarChart3,
 } from "lucide-react";
 
-const today = new Date().toISOString().split("T")[0];
+function getLocalToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 interface Tile {
   label: string;
@@ -47,7 +50,7 @@ const TILES: Tile[] = [
   {
     label: "Schedule",
     icon: <Calendar className="w-6 h-6" />,
-    href: `/supervisor/schedule/${today}`,
+    href: "",
     color: "text-green-600 bg-green-50",
   },
   {
@@ -71,14 +74,47 @@ const TILES: Tile[] = [
   {
     label: "Day Report",
     icon: <BarChart3 className="w-6 h-6" />,
-    href: `/supervisor/day-report/${today}`,
+    href: "",
     color: "text-indigo-600 bg-indigo-50",
+  },
+];
+
+const BANNERS = [
+  {
+    bg: "bg-gradient-to-br from-[#004aad] to-[#0066ee]",
+    title: "Today's Operations",
+    getMetric: (counts: { households?: number; newRequests?: number }) =>
+      counts.households !== undefined ? `${counts.households} active households under management` : "Loading…",
+  },
+  {
+    bg: "bg-gradient-to-br from-emerald-600 to-teal-500",
+    title: "Pending Review",
+    getMetric: (counts: { households?: number; newRequests?: number }) =>
+      counts.newRequests !== undefined
+        ? counts.newRequests > 0
+          ? `${counts.newRequests} new plan requests awaiting your action`
+          : "All requests up-to-date — no pending reviews"
+        : "Loading…",
+  },
+  {
+    bg: "bg-gradient-to-br from-purple-600 to-indigo-600",
+    title: "Quick Tip",
+    getMetric: () => "Use Day Report to track completion rates and reassign delayed jobs quickly.",
   },
 ];
 
 export default function SupervisorDashboardPage() {
   const router = useRouter();
   const [counts, setCounts] = useState<{ households?: number; newRequests?: number }>({});
+  const [activeBanner, setActiveBanner] = useState(0);
+  const bannerTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    bannerTimer.current = setInterval(() => {
+      setActiveBanner((b) => (b + 1) % BANNERS.length);
+    }, 4000);
+    return () => { if (bannerTimer.current) clearInterval(bannerTimer.current); };
+  }, []);
 
   useEffect(() => {
     fetch("/api/supervisor/households")
@@ -98,8 +134,42 @@ export default function SupervisorDashboardPage() {
     month: "short",
   });
 
+  const banner = BANNERS[activeBanner];
+
+  const tilesWithToday = TILES.map((t) => ({
+    ...t,
+    href:
+      t.label === "Schedule" ? `/supervisor/schedule/${getLocalToday()}` :
+      t.label === "Day Report" ? `/supervisor/day-report/${getLocalToday()}` :
+      t.href,
+  }));
+
   return (
     <div className="px-4 py-4 pb-8">
+      {/* Auto-rotating banner */}
+      <div className="mb-5">
+        <div
+          className={`${banner.bg} rounded-2xl px-5 py-5 text-white transition-all duration-500`}
+        >
+          <p className="text-xs font-semibold text-white/70 uppercase tracking-wide mb-1">
+            {banner.title}
+          </p>
+          <p className="text-base font-bold leading-snug">
+            {banner.getMetric(counts)}
+          </p>
+        </div>
+        <div className="flex justify-center gap-1.5 mt-2">
+          {BANNERS.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === activeBanner ? "bg-[#004aad] w-5" : "bg-gray-300 w-1.5"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Date banner */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -113,7 +183,7 @@ export default function SupervisorDashboardPage() {
 
       {/* Tile grid */}
       <div className="grid grid-cols-2 gap-3">
-        {TILES.map((tile) => {
+        {tilesWithToday.map((tile) => {
           const count = tile.countKey ? counts[tile.countKey] : undefined;
           return (
             <button

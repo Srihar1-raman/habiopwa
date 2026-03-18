@@ -41,7 +41,7 @@ function defaultStartDate(): string {
 
 export default function PlanPage() {
   const router = useRouter();
-  const { items, total, preferredStartDate } = useCart();
+  const { items, total, preferredStartDate, loading: cartLoading } = useCart();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<SubmittedRequest | null>(null);
   const [error, setError] = useState("");
@@ -77,6 +77,14 @@ export default function PlanPage() {
       total: data.total,
       planStartDate: data.planStartDate ?? null,
     });
+  }
+
+  if (cartLoading) {
+    return (
+      <div className="flex flex-col min-h-dvh items-center justify-center text-gray-400">
+        Loading...
+      </div>
+    );
   }
 
   if (items.length === 0 && !submitted) {

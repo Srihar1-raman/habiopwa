@@ -14,9 +14,9 @@ interface Profile {
   city: string;
   pincode: string;
   home_type: string;
-  bhk: string;
-  bathrooms: number;
-  people_count: number;
+  bhk: string | number;
+  bathrooms: string | number;
+  people_count: string | number;
   diet_pref: string;
 }
 
@@ -42,7 +42,26 @@ export default function ProfilePage() {
     fetch("/api/customer/profile")
       .then((r) => r.json())
       .then((data) => {
-        setProfile(data.profile ?? data);
+        // API returns { customer: { id, phone, name, customer_profiles: {...} } }
+        const customer = data.customer ?? null;
+        if (customer) {
+          const cp = customer.customer_profiles ?? {};
+          setProfile({
+            name: customer.name ?? "",
+            phone: customer.phone ?? "",
+            flat_no: cp.flat_no ?? "",
+            building: cp.building ?? "",
+            society: cp.society ?? "",
+            sector: cp.sector ?? "",
+            city: cp.city ?? "",
+            pincode: cp.pincode ?? "",
+            home_type: cp.home_type ?? "",
+            bhk: cp.bhk ?? "",
+            bathrooms: cp.bathrooms ?? "",
+            diet_pref: cp.diet_pref ?? "",
+            people_count: cp.people_count ?? "",
+          });
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));

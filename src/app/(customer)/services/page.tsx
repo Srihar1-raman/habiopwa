@@ -19,6 +19,7 @@ import {
   Zap,
   Wrench,
   CalendarDays,
+  User,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatUnitValue } from "@/lib/pricing";
@@ -336,6 +337,13 @@ export default function ServicesHomePage() {
             </div>
             <span className="text-xl font-bold text-[#004aad]">HABIO</span>
           </div>
+          <button
+            onClick={() => router.push("/profile")}
+            className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
+            aria-label="My Profile"
+          >
+            <User className="w-5 h-5 text-gray-600" />
+          </button>
         </div>
       </div>
 
