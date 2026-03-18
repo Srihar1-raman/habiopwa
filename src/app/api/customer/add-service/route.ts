@@ -9,6 +9,7 @@ interface AddServiceItem {
   frequency_label: string;
   unit_type: string;
   unit_value: number;
+  minutes?: number;
   price_monthly: number;
 }
 
@@ -55,8 +56,9 @@ export async function POST(req: NextRequest) {
     frequency_label: item.frequency_label,
     unit_type: item.unit_type,
     unit_value: item.unit_value,
-    minutes: item.unit_value,
+    minutes: item.minutes ?? item.unit_value,
     price_monthly: item.price_monthly,
+    is_addon: true,
   }));
 
   const { error: insertError } = await supabaseAdmin
@@ -67,16 +69,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Failed to add services" }, { status: 500 });
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from("plan_requests")
-    .update({ status: "under_process" })
-    .eq("id", plan_request_id);
+  // Only degrade status for plans that aren't yet active (paid/finalized stays as-is)
+  if (plan.status !== "paid" && plan.status !== "finalized") {
+    const { error: updateError } = await supabaseAdmin
+      .from("plan_requests")
+      .update({ status: "under_process" })
+      .eq("id", plan_request_id);
 
-  if (updateError) {
-    return NextResponse.json(
-      { ok: false, error: "Services added but failed to update plan status" },
-      { status: 500 }
-    );
+    if (updateError) {
+      return NextResponse.json(
+        { ok: false, error: "Services added but failed to update plan status" },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });

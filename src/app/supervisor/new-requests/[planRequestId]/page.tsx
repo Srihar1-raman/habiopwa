@@ -10,6 +10,7 @@ interface PlanItem {
   title: string;
   frequency_label: string;
   price_monthly: number;
+  is_addon?: boolean;
 }
 
 interface RequestDetail {
@@ -64,8 +65,15 @@ export default function NewRequestAllocatePage() {
       const req: RequestDetail = reqData.request;
       setRequest(req);
       setProviders(teamData.providers ?? []);
+
+      // For paid/finalized plans, only show addon items; otherwise show all items
+      const isPaidPlan = req?.status === "paid" || req?.status === "finalized";
+      const itemsToAllocate = isPaidPlan
+        ? (req?.plan_request_items ?? []).filter((i) => i.is_addon)
+        : (req?.plan_request_items ?? []);
+
       setAllocations(
-        (req?.plan_request_items ?? []).map((item) => ({
+        itemsToAllocate.map((item) => ({
           plan_request_item_id: item.id,
           service_provider_id: "",
           scheduled_date: "",
@@ -129,6 +137,12 @@ export default function NewRequestAllocatePage() {
   }
 
   const profile = request.customers?.customer_profiles;
+  const isPaidPlan = request.status === "paid" || request.status === "finalized";
+
+  // For paid plans, only allocate the new addon items
+  const itemsToAllocate = isPaidPlan
+    ? request.plan_request_items.filter((i) => i.is_addon)
+    : request.plan_request_items;
 
   return (
     <div className="flex flex-col min-h-dvh pb-32">
@@ -141,8 +155,15 @@ export default function NewRequestAllocatePage() {
         </button>
         <div className="flex-1">
           <p className="text-xs font-mono text-[#004aad] font-semibold">{request.request_code}</p>
-          <h1 className="text-base font-bold text-gray-900">Allocate Team</h1>
+          <h1 className="text-base font-bold text-gray-900">
+            {isPaidPlan ? "Allocate Add-on Services" : "Allocate Team"}
+          </h1>
         </div>
+        {isPaidPlan && (
+          <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
+            Active Plan
+          </span>
+        )}
       </div>
 
       <div className="px-4 mt-3 flex flex-col gap-4">
@@ -178,8 +199,12 @@ export default function NewRequestAllocatePage() {
               Back to New Requests
             </button>
           </div>
+        ) : itemsToAllocate.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm">
+            No pending add-on items to allocate.
+          </div>
         ) : (
-          request.plan_request_items.map((item, idx) => (
+          itemsToAllocate.map((item, idx) => (
             <div key={item.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -245,7 +270,7 @@ export default function NewRequestAllocatePage() {
         )}
       </div>
 
-      {!success && (
+      {!success && itemsToAllocate.length > 0 && (
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] px-4 py-4 bg-white border-t border-gray-100">
           <Button
             size="lg"

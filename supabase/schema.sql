@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS plan_request_items (
   price_monthly         numeric(10,2) NOT NULL,
   mrp_monthly           numeric(10,2),
   expectations_snapshot jsonb,
+  is_addon              boolean NOT NULL DEFAULT false,
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
 
@@ -306,6 +307,7 @@ ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS discount_pct         num
 ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS time_multiple        numeric(6,2);
 ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS formula_type         text;
 ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS base_price_monthly   numeric(10,2);
+ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS is_addon             boolean NOT NULL DEFAULT false;
 -- =====================
 -- PLAN START DATE & CART PREFERRED DATE
 -- Add plan_start_date to plan_requests and preferred_start_date to carts.

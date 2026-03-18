@@ -21,10 +21,10 @@ export async function PATCH(
     return NextResponse.json({ error: "allocations array is required" }, { status: 400 });
   }
 
-  // Get plan_request to retrieve customer_id
+  // Get plan_request to retrieve customer_id and status
   const { data: planRequest, error: prError } = await supabaseAdmin
     .from("plan_requests")
-    .select("id, customer_id")
+    .select("id, customer_id, status")
     .eq("id", planRequestId)
     .single();
 
@@ -81,14 +81,17 @@ export async function PATCH(
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // Update plan_request status to finalized
-  const { error: updateError } = await supabaseAdmin
-    .from("plan_requests")
-    .update({ status: "finalized" })
-    .eq("id", planRequestId);
+  // For paid/finalized plans (addon allocations), keep the plan status unchanged.
+  // Only update to "finalized" for initial plan submissions.
+  if (planRequest.status !== "paid" && planRequest.status !== "finalized") {
+    const { error: updateError } = await supabaseAdmin
+      .from("plan_requests")
+      .update({ status: "finalized" })
+      .eq("id", planRequestId);
 
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -201,6 +201,14 @@ export default function AddServiceCategoryPage() {
         .map((job) => {
           const inputValue = unitValues[job.id] ?? job.default_unit;
           const { effective } = computePrices(job, inputValue);
+          // Compute minutes: for "min" unit type it equals the input value;
+          // for other types (rooms, sqft, etc.) derive from time_multiple if available.
+          const minutes =
+            job.unit_type === "min"
+              ? inputValue
+              : job.time_multiple != null
+              ? Math.round(inputValue * Number(job.time_multiple))
+              : inputValue;
           return {
             job_id: job.id,
             category_id: category.id,
@@ -208,6 +216,7 @@ export default function AddServiceCategoryPage() {
             frequency_label: job.frequency_label,
             unit_type: job.unit_type,
             unit_value: inputValue,
+            minutes,
             price_monthly: effective,
           };
         });

@@ -17,7 +17,7 @@ export async function GET(
          frequency_label, unit_type, unit_value, minutes,
          base_rate_per_unit, instances_per_month, discount_pct,
          time_multiple, formula_type, base_price_monthly,
-         price_monthly, mrp_monthly, expectations_snapshot,
+         price_monthly, mrp_monthly, expectations_snapshot, is_addon,
          service_categories(slug, name),
          service_jobs(slug, name, code)
        ),
