@@ -29,6 +29,7 @@ DELETE FROM customer_sessions;
 DELETE FROM customer_profiles;
 DELETE FROM customers;
 DELETE FROM provider_sessions;
+DELETE FROM service_providers;
 DELETE FROM job_pricing;
 DELETE FROM job_expectations;
 DELETE FROM service_jobs;
