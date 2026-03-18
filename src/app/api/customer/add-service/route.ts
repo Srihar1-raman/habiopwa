@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     frequency_label: item.frequency_label,
     unit_type: item.unit_type,
     unit_value: item.unit_value,
-    minutes: item.minutes ?? item.unit_value,
+    minutes: item.minutes !== undefined ? item.minutes : item.unit_value,
     price_monthly: item.price_monthly,
     is_addon: true,
   }));

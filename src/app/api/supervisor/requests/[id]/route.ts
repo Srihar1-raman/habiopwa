@@ -13,11 +13,7 @@ export async function GET(
       `id, request_code, status, total_price_monthly, created_at, updated_at,
        customers(id, phone, name, customer_profiles(*)),
        plan_request_items(
-         id, category_id, job_id, job_code, title,
-         frequency_label, unit_type, unit_value, minutes,
-         base_rate_per_unit, instances_per_month, discount_pct,
-         time_multiple, formula_type, base_price_monthly,
-         price_monthly, mrp_monthly, expectations_snapshot, is_addon,
+         *,
          service_categories(slug, name),
          service_jobs(slug, name, code)
        ),

@@ -202,11 +202,11 @@ export default function AddServiceCategoryPage() {
           const inputValue = unitValues[job.id] ?? job.default_unit;
           const { effective } = computePrices(job, inputValue);
           // Compute minutes: for "min" unit type it equals the input value;
-          // for other types (rooms, sqft, etc.) derive from time_multiple if available.
+          // for other types (rooms, sqft, etc.) derive from time_multiple if available and positive.
           const minutes =
             job.unit_type === "min"
               ? inputValue
-              : job.time_multiple != null
+              : job.time_multiple != null && Number(job.time_multiple) > 0
               ? Math.round(inputValue * Number(job.time_multiple))
               : inputValue;
           return {
