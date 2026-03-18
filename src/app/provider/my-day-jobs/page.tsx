@@ -81,21 +81,39 @@ function formatDate(dateStr: string) {
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
-function addDays(dateStr: string, days: number) {
+function addDays(dateStr: string, days: number): string {
+  if (!dateStr) return dateStr;
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function MyDayJobsPage() {
   const router = useRouter();
   const [provider, setProvider] = useState<Provider | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  // Initialize with empty string to avoid SSR/client hydration mismatch;
+  // populated in useEffect once we're on the client.
+  const [date, setDate] = useState<string>("");
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  // Compute today's local date string (YYYY-MM-DD) on the client only
+  function getLocalToday(): string {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // Set today's date once mounted on the client
+  useEffect(() => {
+    setDate(getLocalToday());
+  }, []);
 
   useEffect(() => {
     fetch("/api/provider/me")
@@ -108,9 +126,11 @@ export default function MyDayJobsPage() {
   }, [router]);
 
   const fetchJobs = useCallback(async (d: string) => {
+    if (!d) return;
     setLoadingJobs(true);
     try {
-      const endpoint = d === todayStr
+      const todayLocal = getLocalToday();
+      const endpoint = d === todayLocal
         ? "/api/provider/jobs/today"
         : `/api/provider/jobs/by-date/${d}`;
       const res = await fetch(endpoint);
@@ -137,7 +157,7 @@ export default function MyDayJobsPage() {
     }
   }
 
-  const isToday = date === todayStr;
+  const isToday = date === getLocalToday();
 
   return (
     <div className="flex flex-col flex-1">
@@ -158,19 +178,21 @@ export default function MyDayJobsPage() {
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
         <button
           onClick={() => setDate((d) => addDays(d, -1))}
-          className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
+          disabled={!date}
+          className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition disabled:opacity-40"
         >
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div className="text-center">
-          <span className="text-sm font-semibold text-gray-800">{formatDate(date)}</span>
-          {isToday && (
+          <span className="text-sm font-semibold text-gray-800">{date ? formatDate(date) : "—"}</span>
+          {isToday && date && (
             <span className="ml-2 text-xs bg-[#004aad] text-white px-2 py-0.5 rounded-full">Today</span>
           )}
         </div>
         <button
           onClick={() => setDate((d) => addDays(d, 1))}
-          className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
+          disabled={!date}
+          className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition disabled:opacity-40"
         >
           <ChevronRight className="w-5 h-5 text-gray-600" />
         </button>

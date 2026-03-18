@@ -5,7 +5,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("plan_requests")
     .select(
-      "id, request_code, status, total_price_monthly, created_at, updated_at, customers(phone, name, customer_profiles(flat_no, society, sector, city))"
+      "id, request_code, status, total_price_monthly, plan_start_date, created_at, updated_at, customers(phone, name, customer_profiles(flat_no, society, sector, city))"
     )
     .in("status", ["finalized", "paid", "under_process", "submitted"])
     .order("created_at", { ascending: false });
@@ -14,5 +14,25 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ households: data ?? [] });
+  // Flatten the nested Supabase structure into what the UI expects
+  const households = (data ?? []).map((row) => {
+    type CustomerRow = { phone: string; name: string | null; customer_profiles: { flat_no: string | null; society: string | null; sector: string | null; city: string | null } | null };
+    const customer = row.customers as unknown as CustomerRow | null;
+    const profile = customer?.customer_profiles ?? null;
+    return {
+      plan_request_id: row.id,
+      request_code: row.request_code,
+      status: row.status,
+      total_price_monthly: row.total_price_monthly,
+      plan_start_date: row.plan_start_date ?? null,
+      customer_name: customer?.name ?? null,
+      customer_phone: customer?.phone ?? "",
+      flat_no: profile?.flat_no ?? null,
+      society: profile?.society ?? null,
+      sector: profile?.sector ?? null,
+      city: profile?.city ?? null,
+    };
+  });
+
+  return NextResponse.json({ households });
 }

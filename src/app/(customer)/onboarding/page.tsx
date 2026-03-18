@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft } from "lucide-react";
 
-type Step = "address" | "home";
+type Step = "name" | "address" | "home";
 
 interface FormData {
+  // Name
+  name: string;
   // Address
   flat_no: string;
   building: string;
@@ -22,18 +24,20 @@ interface FormData {
   people_count: string;
 }
 
-const STEPS: Step[] = ["address", "home"];
+const STEPS: Step[] = ["name", "address", "home"];
 const STEP_LABELS: Record<Step, string> = {
+  name: "Your Name",
   address: "Your Address",
   home: "Home & Kitchen",
 };
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("address");
+  const [step, setStep] = useState<Step>("name");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<FormData>({
+    name: "",
     flat_no: "",
     building: "",
     society: "",
@@ -53,7 +57,13 @@ export default function OnboardingPage() {
 
   function handleNext() {
     setError("");
-    if (step === "address") {
+    if (step === "name") {
+      if (!form.name.trim()) {
+        setError("Please enter your name");
+        return;
+      }
+      setStep("address");
+    } else if (step === "address") {
       if (!form.society.trim()) {
         setError("Society / Apartment is required");
         return;
@@ -70,6 +80,7 @@ export default function OnboardingPage() {
 
   function handleBack() {
     if (step === "home") setStep("address");
+    else if (step === "address") setStep("name");
   }
 
   async function handleSubmit() {
@@ -78,6 +89,7 @@ export default function OnboardingPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        name: form.name,
         flat_no: form.flat_no,
         building: form.building,
         society: form.society,
@@ -138,6 +150,21 @@ export default function OnboardingPage() {
 
       {/* Form Content */}
       <div className="flex-1 px-4 pb-4 overflow-y-auto">
+        {step === "name" && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-gray-500">
+              Tell us what to call you. This will be used on your profile and bookings.
+            </p>
+            <Input
+              label="Your Full Name *"
+              placeholder="e.g. Priya Sharma"
+              value={form.name}
+              autoFocus
+              onChange={(e) => update("name", e.target.value)}
+            />
+          </div>
+        )}
+
         {step === "address" && (
           <div className="flex flex-col gap-4">
             <Input

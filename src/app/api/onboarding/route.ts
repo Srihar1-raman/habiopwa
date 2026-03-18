@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
+    name,
     flat_no,
     building,
     society,
@@ -27,17 +28,22 @@ export async function POST(req: NextRequest) {
     kitchen_notes,
   } = body;
 
-  if (!flat_no) {
-    return NextResponse.json(
-      { error: "flat_no is required" },
-      { status: 400 }
-    );
+  // Save name to customers table if provided
+  if (name) {
+    const { error: nameError } = await supabaseAdmin
+      .from("customers")
+      .update({ name })
+      .eq("id", customer.id);
+
+    if (nameError) {
+      return NextResponse.json({ error: "Failed to save name" }, { status: 500 });
+    }
   }
 
   const { error } = await supabaseAdmin.from("customer_profiles").upsert(
     {
       customer_id: customer.id,
-      flat_no,
+      flat_no: flat_no || null,
       building: building || null,
       society: society || null,
       sector: sector || null,

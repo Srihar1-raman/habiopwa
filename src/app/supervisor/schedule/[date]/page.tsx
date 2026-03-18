@@ -37,17 +37,19 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
     fetch(`/api/supervisor/schedule/${date}`)
       .then((r) => r.json())
       .then((d) => {
+        if (cancelled) return;
         const sorted = (d.allocations ?? []).sort((a: Allocation, b: Allocation) =>
           (a.scheduled_start_time ?? "").localeCompare(b.scheduled_start_time ?? "")
         );
         setAllocations(sorted);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [date]);
 
   const displayDate = new Date(date + "T00:00:00").toLocaleDateString("en-IN", {
@@ -65,7 +67,7 @@ export default function SchedulePage() {
     <div className="flex flex-col min-h-dvh pb-8">
       <div className="flex items-center gap-3 px-4 pt-4 pb-3 bg-white sticky top-0 z-10 border-b border-gray-100">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push("/supervisor/dashboard")}
           className="p-2 -ml-2 rounded-full hover:bg-gray-100"
         >
           <ChevronLeft className="w-5 h-5 text-gray-700" />
