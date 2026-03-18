@@ -11,6 +11,8 @@ import {
   Zap,
   AlertTriangle,
   BarChart3,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 
 function getLocalToday() {
@@ -22,7 +24,7 @@ interface Tile {
   label: string;
   icon: React.ReactNode;
   href: string;
-  countKey?: "households" | "newRequests";
+  countKey?: "households" | "newRequests" | "pauseRequests" | "onDemandRequests" | "issues";
   color: string;
 }
 
@@ -57,18 +59,21 @@ const TILES: Tile[] = [
     label: "Pause Requests",
     icon: <PauseCircle className="w-6 h-6" />,
     href: "/supervisor/pause-requests",
+    countKey: "pauseRequests",
     color: "text-yellow-600 bg-yellow-50",
   },
   {
     label: "On-Demand",
     icon: <Zap className="w-6 h-6" />,
     href: "/supervisor/on-demand-requests",
+    countKey: "onDemandRequests",
     color: "text-pink-600 bg-pink-50",
   },
   {
     label: "Issues",
     icon: <AlertTriangle className="w-6 h-6" />,
     href: "/supervisor/issues",
+    countKey: "issues",
     color: "text-red-600 bg-red-50",
   },
   {
@@ -81,31 +86,34 @@ const TILES: Tile[] = [
 
 const BANNERS = [
   {
-    bg: "bg-gradient-to-br from-[#004aad] to-[#0066ee]",
-    title: "Today's Operations",
-    getMetric: (counts: { households?: number; newRequests?: number }) =>
-      counts.households !== undefined ? `${counts.households} active households under management` : "Loading…",
+    bg: "bg-[#004aad]",
+    title: "Subscription Home Services",
+    sub: "Daily cleaning, cooking & more — on a schedule",
+    Icon: Home,
   },
   {
-    bg: "bg-gradient-to-br from-emerald-600 to-teal-500",
-    title: "Pending Review",
-    getMetric: (counts: { households?: number; newRequests?: number }) =>
-      counts.newRequests !== undefined
-        ? counts.newRequests > 0
-          ? `${counts.newRequests} new plan requests awaiting your action`
-          : "All requests up-to-date — no pending reviews"
-        : "Loading…",
+    bg: "bg-[#1a5fc9]",
+    title: "Flexible Plans",
+    sub: "Choose exactly what you need — change anytime",
+    Icon: Sparkles,
   },
   {
-    bg: "bg-gradient-to-br from-purple-600 to-indigo-600",
-    title: "Quick Tip",
-    getMetric: () => "Use Day Report to track completion rates and reassign delayed jobs quickly.",
+    bg: "bg-[#0057cc]",
+    title: "Verified Professionals",
+    sub: "Background-checked helpers for your home",
+    Icon: ShieldCheck,
   },
 ];
 
 export default function SupervisorDashboardPage() {
   const router = useRouter();
-  const [counts, setCounts] = useState<{ households?: number; newRequests?: number }>({});
+  const [counts, setCounts] = useState<{
+    households?: number;
+    newRequests?: number;
+    pauseRequests?: number;
+    onDemandRequests?: number;
+    issues?: number;
+  }>({});
   const [activeBanner, setActiveBanner] = useState(0);
   const bannerTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -125,6 +133,21 @@ export default function SupervisorDashboardPage() {
     fetch("/api/supervisor/new-requests")
       .then((r) => r.json())
       .then((d) => setCounts((prev) => ({ ...prev, newRequests: d.requests?.length ?? d.count ?? 0 })))
+      .catch(() => {});
+
+    fetch("/api/supervisor/pause-requests")
+      .then((r) => r.json())
+      .then((d) => setCounts((prev) => ({ ...prev, pauseRequests: d.pauseRequests?.length ?? 0 })))
+      .catch(() => {});
+
+    fetch("/api/supervisor/on-demand-requests")
+      .then((r) => r.json())
+      .then((d) => setCounts((prev) => ({ ...prev, onDemandRequests: d.requests?.length ?? 0 })))
+      .catch(() => {});
+
+    fetch("/api/supervisor/issues")
+      .then((r) => r.json())
+      .then((d) => setCounts((prev) => ({ ...prev, issues: d.issues?.length ?? 0 })))
       .catch(() => {});
   }, []);
 
@@ -149,14 +172,13 @@ export default function SupervisorDashboardPage() {
       {/* Auto-rotating banner */}
       <div className="mb-5">
         <div
-          className={`${banner.bg} rounded-2xl px-5 py-5 text-white transition-all duration-500`}
+          className={`${banner.bg} rounded-2xl px-5 py-8 text-white transition-all duration-500`}
         >
-          <p className="text-xs font-semibold text-white/70 uppercase tracking-wide mb-1">
-            {banner.title}
-          </p>
-          <p className="text-base font-bold leading-snug">
-            {banner.getMetric(counts)}
-          </p>
+          <div className="mb-3">
+            <banner.Icon className="w-10 h-10 text-white/80" />
+          </div>
+          <h2 className="text-xl font-bold leading-snug">{banner.title}</h2>
+          <p className="text-sm text-blue-100 mt-1.5">{banner.sub}</p>
         </div>
         <div className="flex justify-center gap-1.5 mt-2">
           {BANNERS.map((_, i) => (

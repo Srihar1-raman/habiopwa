@@ -129,8 +129,19 @@ export default function JobDetailPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
-      if (data.job) setJob(data.job);
-      else if (job) setJob({ ...job, status: newStatus });
+      if (data.job && job) {
+        // The API returns the raw job row without nested relations.
+        // Merge the updated fields while preserving the nested data already loaded.
+        setJob({
+          ...job,
+          status: data.job.status ?? newStatus,
+          actual_start_time: data.job.actual_start_time ?? job.actual_start_time,
+          actual_end_time: data.job.actual_end_time ?? job.actual_end_time,
+          is_locked: data.job.is_locked ?? job.is_locked,
+        });
+      } else if (job) {
+        setJob({ ...job, status: newStatus });
+      }
     } finally {
       setActionLoading(false);
     }
@@ -178,7 +189,7 @@ export default function JobDetailPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-start justify-between gap-2 mb-1">
                 <h2 className="text-base font-bold text-gray-900 flex-1">
-                  {job.plan_request_items.title}
+                  {job.plan_request_items?.title ?? "Service"}
                 </h2>
                 <span
                   className={`text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${STATUS_STYLES[job.status] ?? "bg-gray-500 text-white"}`}
@@ -236,10 +247,10 @@ export default function JobDetailPage() {
                 <Info className="w-4 h-4 text-[#004aad]" />
                 <span className="text-sm font-semibold text-gray-700">Job Info</span>
               </div>
-              <Row label="Frequency" value={job.plan_request_items.frequency_label} />
+              <Row label="Frequency" value={job.plan_request_items?.frequency_label ?? "—"} />
               <Row
                 label="Quantity"
-                value={`${job.plan_request_items.unit_value} ${job.plan_request_items.unit_type}`}
+                value={`${job.plan_request_items?.unit_value ?? "—"} ${job.plan_request_items?.unit_type ?? ""}`}
               />
             </div>
 

@@ -102,20 +102,20 @@ export default function ProfilePage() {
 
   async function handleSignOut() {
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
-    document.cookie = "habio_session=; Max-Age=0; path=/";
-    router.push("/login");
+    // Use a hard navigation so the server-cleared httpOnly cookie is respected
+    window.location.href = "/login";
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-[#004aad] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-[480px] mx-auto px-4 py-4 flex items-center gap-3">

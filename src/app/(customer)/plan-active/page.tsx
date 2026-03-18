@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import {
-  CheckCircle,
   User,
   Calendar,
   ChevronRight,
@@ -14,6 +13,9 @@ import {
   AlertTriangle,
   Plus,
   ClipboardList,
+  Home,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 
 interface PlanItem {
@@ -63,19 +65,22 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
 
 const BANNERS = [
   {
-    bg: "bg-gradient-to-br from-[#004aad] to-[#0066ee]",
-    title: "Your Home Services are Active",
-    sub: "Sit back — your HABIO team is on schedule for today.",
+    bg: "bg-[#004aad]",
+    title: "Subscription Home Services",
+    sub: "Daily cleaning, cooking & more — on a schedule",
+    Icon: Home,
   },
   {
-    bg: "bg-gradient-to-br from-emerald-600 to-teal-500",
-    title: "Need something extra today?",
-    sub: "Request on-demand services — plumber, electrician & more.",
+    bg: "bg-[#1a5fc9]",
+    title: "Flexible Plans",
+    sub: "Choose exactly what you need — change anytime",
+    Icon: Sparkles,
   },
   {
-    bg: "bg-gradient-to-br from-purple-600 to-indigo-600",
-    title: "Planning a break?",
-    sub: "Pause your plan for vacations or holidays in one tap.",
+    bg: "bg-[#0057cc]",
+    title: "Verified Professionals",
+    sub: "Background-checked helpers for your home",
+    Icon: ShieldCheck,
   },
 ];
 
@@ -185,7 +190,7 @@ export default function PlanActivePage() {
   const reallocatedJobs = todayJobs.filter((j) => j.status === "reallocated");
 
   return (
-    <div className="flex flex-col min-h-dvh pb-10 bg-gray-50">
+    <div className="flex flex-col min-h-dvh pb-10">
       {/* App bar */}
       <div className="px-4 pt-12 pb-4 bg-white">
         <div className="flex items-center justify-between">
@@ -208,18 +213,15 @@ export default function PlanActivePage() {
       {/* Banner */}
       <div className="px-4 mt-2">
         <div
-          className={`${banner.bg} rounded-2xl px-5 py-6 text-white transition-all duration-500`}
+          className={`${banner.bg} rounded-2xl px-5 py-8 text-white transition-all duration-500`}
         >
-          <div className="flex items-center gap-2 mb-1">
-            <CheckCircle className="w-5 h-5 text-green-300" />
-            <span className="text-xs font-semibold text-white/80 uppercase tracking-wide">
-              {planRequest.request_code}
-            </span>
+          <div className="mb-3">
+            <banner.Icon className="w-10 h-10 text-white/80" />
           </div>
-          <h2 className="text-lg font-bold leading-snug">{banner.title}</h2>
-          <p className="text-sm text-white/80 mt-1">{banner.sub}</p>
+          <h2 className="text-xl font-bold leading-snug">{banner.title}</h2>
+          <p className="text-sm text-blue-100 mt-1.5">{banner.sub}</p>
         </div>
-        <div className="flex justify-center gap-1.5 mt-2.5">
+        <div className="flex justify-center gap-1.5 mt-3">
           {BANNERS.map((_, i) => (
             <div
               key={i}
@@ -338,7 +340,7 @@ export default function PlanActivePage() {
             <p className="text-sm font-semibold text-gray-800">On-Demand Job</p>
           </button>
           <button
-            onClick={() => router.push("/pause")}
+            onClick={() => router.push("/pause-request")}
             className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-left flex flex-col gap-2 active:scale-[0.97] transition-transform"
           >
             <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center">
