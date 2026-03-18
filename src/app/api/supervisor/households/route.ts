@@ -7,7 +7,7 @@ export async function GET() {
     .select(
       "id, request_code, status, total_price_monthly, plan_start_date, created_at, updated_at, customers(phone, name, customer_profiles(flat_no, society, sector, city))"
     )
-    .in("status", ["finalized", "paid", "under_process", "submitted"])
+    .eq("status", "paid")
     .order("created_at", { ascending: false });
 
   if (error) {
