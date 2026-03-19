@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest } from "@/lib/staff-session";
 
+// Auth: supervisor session required (added PR1)
 export async function GET() {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("plan_requests")
     .select(
       "id, request_code, status, total_price_monthly, plan_start_date, created_at, updated_at, customers(phone, name, customer_profiles(flat_no, society, sector, city))"
     )
     .eq("status", "paid")
+    .eq("assigned_supervisor_id", staff.id)
     .order("created_at", { ascending: false });
 
   if (error) {

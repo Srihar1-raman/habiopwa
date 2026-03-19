@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest } from "@/lib/staff-session";
 
+// Auth: supervisor session required (added PR1)
 export async function GET() {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const selectFields =
     "id, request_code, status, total_price_monthly, created_at, updated_at, customers(phone, name, customer_profiles(flat_no, society, sector, city))";
 
-  // 1. Regular new plan submissions (initial requests)
+  // 1. Regular new plan submissions (initial requests) assigned to this supervisor
   const { data: regularRequests, error } = await supabaseAdmin
     .from("plan_requests")
     .select(selectFields)
     .in("status", ["submitted", "under_process"])
+    .eq("assigned_supervisor_id", staff.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -53,6 +61,7 @@ export async function GET() {
         .select(selectFields)
         .in("id", pendingAddonPlanIds)
         .in("status", ["paid", "finalized"])
+        .eq("assigned_supervisor_id", staff.id)
         .order("created_at", { ascending: false });
 
       addonPlanRequests = addonPlans ?? [];
