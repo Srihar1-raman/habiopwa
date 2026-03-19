@@ -593,7 +593,7 @@ ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
 -- Add missing columns to locations (safe for existing installs)
 ALTER TABLE locations ADD COLUMN IF NOT EXISTS state text;
 ALTER TABLE locations ADD COLUMN IF NOT EXISTS pincode text;
-ALTER TABLE locations ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS staff_accounts (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
