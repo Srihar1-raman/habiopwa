@@ -1511,15 +1511,15 @@ UPDATE job_allocations
 --   Habio Admin  (admin)       → seed-staff-session-token-habio-admin-adm001
 
 INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
-  ('fs000000-0000-0000-0000-000000000001',
+  ('fb000000-0000-0000-0000-000000000001',
    'f0000000-0000-0000-0000-000000000005',
    'seed-staff-session-token-suresh-yadav-sv001',
    '2027-12-31 23:59:59+05:30'),
-  ('fs000000-0000-0000-0000-000000000002',
+  ('fb000000-0000-0000-0000-000000000002',
    'f0000000-0000-0000-0000-000000000007',
    'seed-staff-session-token-kavita-devi-sv003',
    '2027-12-31 23:59:59+05:30'),
-  ('fs000000-0000-0000-0000-000000000003',
+  ('fb000000-0000-0000-0000-000000000003',
    'f0000000-0000-0000-0000-000000000001',
    'seed-staff-session-token-habio-admin-adm001',
    '2027-12-31 23:59:59+05:30');
@@ -1568,7 +1568,7 @@ INSERT INTO staff_accounts (
 
 -- Seed staff sessions for new admins
 INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
-  ('fs000000-0000-0000-0000-000000000004',
+  ('fb000000-0000-0000-0000-000000000004',
    'aa000000-0000-0000-0000-000000000001',
    'seed-staff-session-token-srihari-raman-adm002',
    '2027-12-31 23:59:59+05:30');
@@ -1657,11 +1657,29 @@ INSERT INTO customer_profiles (
 INSERT INTO carts (id, customer_id, status) VALUES
   ('ec000000-0000-0000-0000-000000000006', 'ee000000-0000-0000-0000-000000000006', 'active');
 
-INSERT INTO cart_items (cart_id, job_id, quantity, custom_minutes) VALUES
+INSERT INTO cart_items (
+  cart_id, category_id, job_id, job_code,
+  frequency_label, unit_type, unit_value, minutes,
+  base_rate_per_unit, instances_per_month, discount_pct, formula_type,
+  base_price_monthly, unit_price_monthly, mrp_monthly,
+  sort_order
+) VALUES
   ('ec000000-0000-0000-0000-000000000006',
-   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1), 1, 45),
+   '00000000-0000-0000-0000-000000000001',
+   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
+   'HKP1-CR-D-1A',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000, 'standard',
+   4455.00, 3118.50, 4455.00,
+   1),
   ('ec000000-0000-0000-0000-000000000006',
-   (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1), 1, 60);
+   '00000000-0000-0000-0000-000000000002',
+   (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1),
+   'KCH-CR-D-1A',
+   'Daily', 'min', 60, 60,
+   4.0000, 30, 0.3000, 'standard',
+   7200.00, 5040.00, 7200.00,
+   2);
 
 
 -- ── PR3 Plan Requests ─────────────────────────────────────────────────
@@ -1707,47 +1725,87 @@ INSERT INTO plan_requests (
 -- ── PR3 Plan Request Items (simple, for active/pending plans) ─────────
 
 INSERT INTO plan_request_items (
-  id, plan_request_id, job_id, category_id, title, quantity, custom_minutes, is_addon
+  id, plan_request_id, job_id, category_id, title,
+  frequency_label, unit_type, unit_value, minutes,
+  base_rate_per_unit, instances_per_month, discount_pct,
+  time_multiple, formula_type, base_price_monthly,
+  price_monthly, mrp_monthly,
+  is_addon
 ) VALUES
   -- Rahul (C1): HKP daily + Kitchen morning
   ('pt000000-0000-0000-0001-000000000001',
    'pb000000-0000-0000-0000-000000000001',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping', 1, 45, false),
+   'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000,
+   NULL, 'standard', 4455.00,
+   3118.50, 4455.00,
+   false),
   ('pt000000-0000-0000-0001-000000000002',
    'pb000000-0000-0000-0000-000000000001',
    (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000002',
-   'Daily Cooking - Morning Shift', 1, 60, false),
+   'Daily Cooking - Morning Shift',
+   'Daily', 'min', 60, 60,
+   4.0000, 30, 0.3000,
+   NULL, 'standard', 7200.00,
+   5040.00, 7200.00,
+   false),
   -- Neha (C2): HKP daily + Car Care
   ('pt000000-0000-0000-0002-000000000001',
    'pb000000-0000-0000-0000-000000000002',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping', 1, 45, false),
+   'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000,
+   NULL, 'standard', 4455.00,
+   3118.50, 4455.00,
+   false),
   ('pt000000-0000-0000-0002-000000000002',
    'pb000000-0000-0000-0000-000000000002',
    (SELECT id FROM service_jobs WHERE code = 'CCR-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000003',
-   'Basic Car Care Routine', 1, NULL, false),
+   'Basic Car Care Routine',
+   'Daily', 'count_cars', 1, 15,
+   3.3000, 30, 0.3000,
+   15.00, 'compound_head', 1683.00,
+   1178.10, 1683.00,
+   false),
   -- Vikram (C3): HKP + Kitchen (review pending)
   ('pt000000-0000-0000-0003-000000000001',
    'pb000000-0000-0000-0000-000000000003',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping', 1, 45, false),
+   'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000,
+   NULL, 'standard', 4455.00,
+   3118.50, 4455.00,
+   false),
   -- Shreya (C8): HKP + Garden
   ('pt000000-0000-0000-0008-000000000001',
    'pb000000-0000-0000-0000-000000000008',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping', 1, 45, false),
+   'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000,
+   NULL, 'standard', 4455.00,
+   3118.50, 4455.00,
+   false),
   ('pt000000-0000-0000-0008-000000000002',
    'pb000000-0000-0000-0000-000000000008',
    (SELECT id FROM service_jobs WHERE code = 'GCR-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000004',
-   'Basic Garden Care Routine', 1, NULL, false);
+   'Basic Garden Care Routine',
+   'Daily', 'count_plants', 10, 5,
+   3.3000, 30, 0.3000,
+   0.50, 'compound_head', 891.00,
+   623.70, 891.00,
+   false);
 
 
 -- ── PR3 Plan Request Events ────────────────────────────────────────────
