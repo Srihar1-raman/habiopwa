@@ -256,6 +256,8 @@ test every flow immediately after seeding.
 
 ### Seed Credentials
 
+**Customer & Provider** — login at `/login` and `/provider/login` (phone + OTP):
+
 | Role | Name | Phone | OTP |
 |------|------|-------|-----|
 | Customer | Ananya Sharma | `+919800000001` | `123456` |
@@ -264,6 +266,28 @@ test every flow immediately after seeding.
 | Provider | Sunita Devi (Cook) | `+919900000002` | `123456` |
 | Provider | Priya Nair (HKP) | `+919900000005` | `123456` |
 | Provider | Deepa Kumari (Cars) | `+919900000007` | `123456` |
+
+**Staff (Admin Portal)** — login at `/admin/login` (email + password):
+
+| Role | Name | Email | Password |
+|------|------|-------|----------|
+| Admin | Habio Admin | `admin@habio.in` | `admin123` |
+| Admin | Srihari Raman | `srihari@habio.in` | `admin123` |
+| Admin | Founder One | `founder1@habio.in` | `admin123` |
+| Admin | Founder Two | `founder2@habio.in` | `admin123` |
+| Ops Lead | Rajesh Kumar | `rajesh@habio.in` | `ops123` |
+| Manager | Priya Sharma | `priya@habio.in` | `mgr123` |
+| Manager | Amit Verma | `amit@habio.in` | `mgr123` |
+
+**Supervisors** — login at `/supervisor/login` (phone + OTP = last 4 digits of phone; stored without `+91` prefix):
+
+| Role | Name | Phone | OTP |
+|------|------|-------|-----|
+| Supervisor | Suresh Yadav | `9100000001` | `0001` |
+| Supervisor | Deepak Singh | `9100000002` | `0002` |
+| Supervisor | Kavita Devi | `9100000003` | `0003` |
+
+**Staff hierarchy:** Admin → Ops Lead (Rajesh) → Manager (Priya) → Supervisors (Suresh, Deepak) / Manager (Amit) → Supervisor (Kavita)
 
 ### What's Seeded
 
