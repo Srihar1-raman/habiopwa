@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest } from "@/lib/staff-session";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ providerId: string }> }
 ) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { providerId } = await params;
   const body = await req.json();
   const { leave_start_date, leave_end_date, leave_type } = body;

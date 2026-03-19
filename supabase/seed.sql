@@ -1523,3 +1523,335 @@ INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
    'f0000000-0000-0000-0000-000000000001',
    'seed-staff-session-token-habio-admin-adm001',
    '2027-12-31 23:59:59+05:30');
+
+
+-- =====================================================================
+-- SEED V2 — Full Simulated Ecosystem (PR3)
+-- New UUID prefixes:
+--   aa000000-… = new admin accounts
+--   e0000000-…000004/005 = new specific locations
+--   dd000000-… = new service providers
+--   ee000000-… = new customers (PR3 lifecycle stages)
+--   pb000000-… = new plan requests
+--   pt000000-… = new plan request items
+--   jj000000-… = new job allocations
+-- =====================================================================
+
+
+-- ── PR3 Locations (more specific sectors) ─────────────────────────────
+-- Sector 50 and Sector 57 specific (separate from old cluster locations)
+
+INSERT INTO locations (id, name, city, sector, state, pincode, is_active) VALUES
+  ('e0000000-0000-0000-0000-000000000004', 'Sector 50, Gurugram', 'Gurugram', '50', 'Haryana', '122018', true),
+  ('e0000000-0000-0000-0000-000000000005', 'Sector 57, Gurugram', 'Gurugram', '57', 'Haryana', '122011', true);
+
+
+-- ── PR3 Admin Accounts ────────────────────────────────────────────────
+-- Fixed bcrypt hash for "admin123": $2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6
+-- Three founders added alongside existing Habio Admin account
+
+INSERT INTO staff_accounts (
+  id, phone, name, email, password_hash, role, status, reports_to, location_id
+) VALUES
+  ('aa000000-0000-0000-0000-000000000001',
+   '9000001001', 'Srihari Raman', 'srihari@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'admin', 'active', NULL, NULL),
+  ('aa000000-0000-0000-0000-000000000002',
+   '9000001002', 'Founder One', 'founder1@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'admin', 'active', NULL, NULL),
+  ('aa000000-0000-0000-0000-000000000003',
+   '9000001003', 'Founder Two', 'founder2@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'admin', 'active', NULL, NULL);
+
+-- Seed staff sessions for new admins
+INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
+  ('fs000000-0000-0000-0000-000000000004',
+   'aa000000-0000-0000-0000-000000000001',
+   'seed-staff-session-token-srihari-raman-adm002',
+   '2027-12-31 23:59:59+05:30');
+
+
+-- ── PR3 Service Providers ─────────────────────────────────────────────
+-- dd000000-… prefix
+-- HKP: Lakshmi (d01), Meena (d02), Geeta (d03)
+-- KCH: Sunita (d04), Rekha (d05)
+-- CCR: Mohan (d06), Raju (d07)
+-- GCR: Dinesh (d08)
+-- Technician: Vijay-Electrical (d09), Sunil-Plumber (d10)
+-- Shared Partners: Anil-AC (d11), Deepak-RO (d12)
+
+INSERT INTO service_providers (id, phone, name, specialization, is_active, status) VALUES
+  ('dd000000-0000-0000-0000-000000000001', '9500000101', 'Lakshmi Devi',   'Housekeeping',              true,  'active'),
+  ('dd000000-0000-0000-0000-000000000002', '9500000102', 'Meena Kumari',   'Housekeeping',              true,  'active'),
+  ('dd000000-0000-0000-0000-000000000003', '9500000103', 'Geeta Bai',      'Housekeeping',              true,  'active'),
+  ('dd000000-0000-0000-0000-000000000004', '9500000104', 'Sunita Rani',    'Kitchen Services',          true,  'active'),
+  ('dd000000-0000-0000-0000-000000000005', '9500000105', 'Rekha Devi',     'Kitchen Services',          true,  'active'),
+  ('dd000000-0000-0000-0000-000000000006', '9500000106', 'Mohan Lal',      'Car Care',                  true,  'active'),
+  ('dd000000-0000-0000-0000-000000000007', '9500000107', 'Raju Kumar',     'Car Care',                  true,  'active'),
+  ('dd000000-0000-0000-0000-000000000008', '9500000108', 'Dinesh Yadav',   'Garden Care',               true,  'active'),
+  ('dd000000-0000-0000-0000-000000000009', '9500000109', 'Vijay Singh',    'Technician - Electrical',   true,  'active'),
+  ('dd000000-0000-0000-0000-000000000010', '9500000110', 'Sunil Verma',    'Technician - Plumber',      true,  'active'),
+  ('dd000000-0000-0000-0000-000000000011', '9500000111', 'Anil Sharma',    'Technician Partner AC',     true,  'active'),
+  ('dd000000-0000-0000-0000-000000000012', '9500000112', 'Deepak Tiwari',  'Technician Partner RO',     true,  'active');
+
+
+-- ── PR3 Provider Team Assignments ─────────────────────────────────────
+-- Suresh (f0000000-000005) team: Lakshmi, Sunita, Mohan, Dinesh, Vijay, Anil (shared), Deepak-RO (shared)
+-- Deepak/Ramesh (f0000000-000006) team: Meena, Rekha, Raju, Sunil, Anil (shared), Deepak-RO (shared)
+-- Kavita (f0000000-000007) team: Geeta, Lakshmi (shared with Suresh)
+
+INSERT INTO provider_team_assignments (service_provider_id, supervisor_id) VALUES
+  -- Suresh's team
+  ('dd000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000005'), -- Lakshmi
+  ('dd000000-0000-0000-0000-000000000004', 'f0000000-0000-0000-0000-000000000005'), -- Sunita
+  ('dd000000-0000-0000-0000-000000000006', 'f0000000-0000-0000-0000-000000000005'), -- Mohan
+  ('dd000000-0000-0000-0000-000000000008', 'f0000000-0000-0000-0000-000000000005'), -- Dinesh
+  ('dd000000-0000-0000-0000-000000000009', 'f0000000-0000-0000-0000-000000000005'), -- Vijay
+  ('dd000000-0000-0000-0000-000000000011', 'f0000000-0000-0000-0000-000000000005'), -- Anil (shared)
+  ('dd000000-0000-0000-0000-000000000012', 'f0000000-0000-0000-0000-000000000005'), -- Deepak-RO (shared)
+  -- Deepak/Ramesh's team
+  ('dd000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000006'), -- Meena
+  ('dd000000-0000-0000-0000-000000000005', 'f0000000-0000-0000-0000-000000000006'), -- Rekha
+  ('dd000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000006'), -- Raju
+  ('dd000000-0000-0000-0000-000000000010', 'f0000000-0000-0000-0000-000000000006'), -- Sunil
+  ('dd000000-0000-0000-0000-000000000011', 'f0000000-0000-0000-0000-000000000006'), -- Anil (shared)
+  ('dd000000-0000-0000-0000-000000000012', 'f0000000-0000-0000-0000-000000000006'), -- Deepak-RO (shared)
+  -- Kavita's team
+  ('dd000000-0000-0000-0000-000000000003', 'f0000000-0000-0000-0000-000000000007'), -- Geeta
+  ('dd000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000007'); -- Lakshmi (shared with Suresh)
+
+
+-- ── PR3 Customers ─────────────────────────────────────────────────────
+-- ee000000-… prefix, 8 customers at various lifecycle stages
+
+INSERT INTO customers (id, phone, name) VALUES
+  ('ee000000-0000-0000-0000-000000000001', '9200000001', 'Rahul Verma'),
+  ('ee000000-0000-0000-0000-000000000002', '9200000002', 'Neha Gupta'),
+  ('ee000000-0000-0000-0000-000000000003', '9200000003', 'Vikram Patel'),
+  ('ee000000-0000-0000-0000-000000000004', '9200000004', 'Anita Reddy'),
+  ('ee000000-0000-0000-0000-000000000005', '9200000005', 'Deepak Joshi'),
+  ('ee000000-0000-0000-0000-000000000006', '9200000006', 'Pooja Mehta'),
+  ('ee000000-0000-0000-0000-000000000007', '9200000007', 'Karan Singh'),
+  ('ee000000-0000-0000-0000-000000000008', '9200000008', 'Shreya Iyer');
+
+INSERT INTO customer_profiles (
+  customer_id, flat_no, building, society, sector, city, pincode, home_type, bhk, bathrooms, balconies
+) VALUES
+  ('ee000000-0000-0000-0000-000000000001', 'B-402', 'Orchid Block', 'DLF Magnolias', '50', 'Gurugram', '122018', 'apartment', 3, 3, 2),
+  ('ee000000-0000-0000-0000-000000000002', 'A-201', 'Rose Block',   'Ardee City',    '57', 'Gurugram', '122011', 'apartment', 2, 2, 1),
+  ('ee000000-0000-0000-0000-000000000003', 'C-105', 'Jasmine Tower','Suncity',       '50', 'Gurugram', '122018', 'apartment', 3, 2, 2),
+  ('ee000000-0000-0000-0000-000000000004', 'D-301', 'Oak Tower',    'Hamilton Court','57', 'Gurugram', '122011', 'apartment', 2, 2, 1),
+  ('ee000000-0000-0000-0000-000000000005', 'F-501', 'Palm Block',   'Nirvana Country','50','Gurugram', '122018', 'apartment', 3, 3, 2),
+  ('ee000000-0000-0000-0000-000000000006', 'G-102', 'Coral Block',  'Emaar Palm Hills','57','Gurugram','122011', 'apartment', 2, 2, 1),
+  ('ee000000-0000-0000-0000-000000000007', 'H-203', 'Ivy Block',    'Unitech Escape', '50','Gurugram', '122018', 'apartment', 2, 2, 1),
+  ('ee000000-0000-0000-0000-000000000008', 'J-401', 'Cedar Block',  'Pioneer Park',   '50','Gurugram', '122018', 'apartment', 3, 2, 2);
+
+
+-- ── PR3 Carts ─────────────────────────────────────────────────────────
+-- Customer 6 (Pooja): active cart with items
+-- Customer 7 (Karan): no cart
+
+INSERT INTO carts (id, customer_id, status) VALUES
+  ('ec000000-0000-0000-0000-000000000006', 'ee000000-0000-0000-0000-000000000006', 'active');
+
+INSERT INTO cart_items (cart_id, job_id, quantity, custom_minutes) VALUES
+  ('ec000000-0000-0000-0000-000000000006',
+   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1), 1, 45),
+  ('ec000000-0000-0000-0000-000000000006',
+   (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1), 1, 60);
+
+
+-- ── PR3 Plan Requests ─────────────────────────────────────────────────
+-- pb000000-… prefix
+-- C1 Rahul: active, Suresh (supervisor 1)
+-- C2 Neha: active, Deepak/Ramesh (supervisor 2)
+-- C3 Vikram: captain_review_pending, Suresh
+-- C4 Anita: payment_pending, Deepak/Ramesh
+-- C5 Deepak Joshi: captain_allocation_pending (no supervisor yet)
+-- C8 Shreya: active, Kavita (supervisor 3)
+
+INSERT INTO plan_requests (
+  id, customer_id, request_code, status,
+  total_price_monthly, plan_start_date, is_recurring,
+  assigned_supervisor_id
+) VALUES
+  ('pb000000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001',
+   'HAB-PR3-001', 'active', 6500.00, '2026-02-01', true,
+   'f0000000-0000-0000-0000-000000000005'), -- Suresh
+  ('pb000000-0000-0000-0000-000000000002',
+   'ee000000-0000-0000-0000-000000000002',
+   'HAB-PR3-002', 'active', 5800.00, '2026-02-15', true,
+   'f0000000-0000-0000-0000-000000000006'), -- Deepak/Ramesh
+  ('pb000000-0000-0000-0000-000000000003',
+   'ee000000-0000-0000-0000-000000000003',
+   'HAB-PR3-003', 'captain_review_pending', 7200.00, NULL, true,
+   'f0000000-0000-0000-0000-000000000005'), -- Suresh
+  ('pb000000-0000-0000-0000-000000000004',
+   'ee000000-0000-0000-0000-000000000004',
+   'HAB-PR3-004', 'payment_pending', 5200.00, NULL, true,
+   'f0000000-0000-0000-0000-000000000006'), -- Deepak/Ramesh
+  ('pb000000-0000-0000-0000-000000000005',
+   'ee000000-0000-0000-0000-000000000005',
+   'HAB-PR3-005', 'captain_allocation_pending', 6000.00, NULL, true,
+   NULL), -- no supervisor yet
+  ('pb000000-0000-0000-0000-000000000008',
+   'ee000000-0000-0000-0000-000000000008',
+   'HAB-PR3-008', 'active', 7500.00, '2026-03-01', true,
+   'f0000000-0000-0000-0000-000000000007'); -- Kavita
+
+
+-- ── PR3 Plan Request Items (simple, for active/pending plans) ─────────
+
+INSERT INTO plan_request_items (
+  id, plan_request_id, job_id, category_id, title, quantity, custom_minutes, is_addon
+) VALUES
+  -- Rahul (C1): HKP daily + Kitchen morning
+  ('pt000000-0000-0000-0001-000000000001',
+   'pb000000-0000-0000-0000-000000000001',
+   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000001',
+   'Dusting, Brooming, Mopping', 1, 45, false),
+  ('pt000000-0000-0000-0001-000000000002',
+   'pb000000-0000-0000-0000-000000000001',
+   (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000002',
+   'Daily Cooking - Morning Shift', 1, 60, false),
+  -- Neha (C2): HKP daily + Car Care
+  ('pt000000-0000-0000-0002-000000000001',
+   'pb000000-0000-0000-0000-000000000002',
+   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000001',
+   'Dusting, Brooming, Mopping', 1, 45, false),
+  ('pt000000-0000-0000-0002-000000000002',
+   'pb000000-0000-0000-0000-000000000002',
+   (SELECT id FROM service_jobs WHERE code = 'CCR-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000003',
+   'Basic Car Care Routine', 1, NULL, false),
+  -- Vikram (C3): HKP + Kitchen (review pending)
+  ('pt000000-0000-0000-0003-000000000001',
+   'pb000000-0000-0000-0000-000000000003',
+   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000001',
+   'Dusting, Brooming, Mopping', 1, 45, false),
+  -- Shreya (C8): HKP + Garden
+  ('pt000000-0000-0000-0008-000000000001',
+   'pb000000-0000-0000-0000-000000000008',
+   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000001',
+   'Dusting, Brooming, Mopping', 1, 45, false),
+  ('pt000000-0000-0000-0008-000000000002',
+   'pb000000-0000-0000-0000-000000000008',
+   (SELECT id FROM service_jobs WHERE code = 'GCR-CR-D-1A' LIMIT 1),
+   '00000000-0000-0000-0000-000000000004',
+   'Basic Garden Care Routine', 1, NULL, false);
+
+
+-- ── PR3 Plan Request Events ────────────────────────────────────────────
+
+INSERT INTO plan_request_events (plan_request_id, event_type, note, created_at) VALUES
+  ('pb000000-0000-0000-0000-000000000001', 'submitted',  'Customer submitted plan request', '2026-01-25 10:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000001', 'supervisor_assigned', 'Assigned to Suresh Yadav', '2026-01-26 11:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000001', 'captain_reviewed', 'On-site review completed', '2026-01-28 15:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000001', 'payment_received', 'First payment received', '2026-01-31 18:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000001', 'status_changed', 'Plan activated', '2026-02-01 09:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000002', 'submitted',  'Customer submitted plan request', '2026-02-08 14:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000002', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-02-09 10:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000002', 'captain_reviewed', 'On-site review completed', '2026-02-11 16:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000002', 'payment_received', 'First payment received', '2026-02-14 20:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000002', 'status_changed', 'Plan activated', '2026-02-15 09:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000003', 'submitted',  'Customer submitted plan request', '2026-03-10 11:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000003', 'supervisor_assigned', 'Assigned to Suresh Yadav for review', '2026-03-11 09:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000004', 'submitted',  'Customer submitted plan request', '2026-03-12 12:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000004', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-03-13 10:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000004', 'captain_reviewed', 'On-site review done, payment link sent', '2026-03-15 14:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000005', 'submitted',  'Customer submitted plan request', '2026-03-17 09:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000008', 'submitted',  'Customer submitted plan request', '2026-02-22 10:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000008', 'supervisor_assigned', 'Assigned to Kavita Devi', '2026-02-23 11:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000008', 'captain_reviewed', 'On-site review completed', '2026-02-25 15:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000008', 'payment_received', 'First payment received', '2026-02-28 18:00:00+05:30'),
+  ('pb000000-0000-0000-0000-000000000008', 'status_changed', 'Plan activated', '2026-03-01 09:00:00+05:30');
+
+
+-- ── PR3 Job Allocations (for active plans — Rahul C1, Neha C2, Shreya C8) ──
+
+INSERT INTO job_allocations (
+  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id,
+  supervisor_id, scheduled_date, scheduled_start_time, scheduled_end_time, status, is_locked
+) VALUES
+  -- Rahul (C1): HKP by Lakshmi, Kitchen by Sunita — today
+  ('jj000000-0000-0000-0001-000000000001',
+   'pb000000-0000-0000-0000-000000000001',
+   'pt000000-0000-0000-0001-000000000001',
+   'dd000000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001',
+   'f0000000-0000-0000-0000-000000000005',
+   CURRENT_DATE, '07:00', '07:45', 'scheduled', false),
+  ('jj000000-0000-0000-0001-000000000002',
+   'pb000000-0000-0000-0000-000000000001',
+   'pt000000-0000-0000-0001-000000000002',
+   'dd000000-0000-0000-0000-000000000004',
+   'ee000000-0000-0000-0000-000000000001',
+   'f0000000-0000-0000-0000-000000000005',
+   CURRENT_DATE, '08:30', '09:30', 'scheduled', false),
+  -- Neha (C2): HKP by Meena, Car Care by Raju — today
+  ('jj000000-0000-0000-0002-000000000001',
+   'pb000000-0000-0000-0000-000000000002',
+   'pt000000-0000-0000-0002-000000000001',
+   'dd000000-0000-0000-0000-000000000002',
+   'ee000000-0000-0000-0000-000000000002',
+   'f0000000-0000-0000-0000-000000000006',
+   CURRENT_DATE, '08:00', '08:45', 'scheduled', false),
+  ('jj000000-0000-0000-0002-000000000002',
+   'pb000000-0000-0000-0000-000000000002',
+   'pt000000-0000-0000-0002-000000000002',
+   'dd000000-0000-0000-0000-000000000007',
+   'ee000000-0000-0000-0000-000000000002',
+   'f0000000-0000-0000-0000-000000000006',
+   CURRENT_DATE, '07:00', '07:15', 'scheduled', false),
+  -- Shreya (C8): HKP by Geeta (Kavita team) — today
+  ('jj000000-0000-0000-0008-000000000001',
+   'pb000000-0000-0000-0000-000000000008',
+   'pt000000-0000-0000-0008-000000000001',
+   'dd000000-0000-0000-0000-000000000003',
+   'ee000000-0000-0000-0000-000000000008',
+   'f0000000-0000-0000-0000-000000000007',
+   CURRENT_DATE, '07:30', '08:15', 'scheduled', false);
+
+
+-- ── PR3 Issue Tickets (for active customers C1 and C2) ────────────────
+
+INSERT INTO issue_tickets (
+  id, customer_id, plan_request_id, title, description, status, priority, created_at
+) VALUES
+  ('it000000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001',
+   'pb000000-0000-0000-0000-000000000001',
+   'Mop not cleaned properly',
+   'The housekeeper left the mop dirty yesterday. Please ensure it is cleaned after use.',
+   'open', 'medium',
+   '2026-03-17 09:00:00+05:30'),
+  ('it000000-0000-0000-0000-000000000002',
+   'ee000000-0000-0000-0000-000000000002',
+   'pb000000-0000-0000-0000-000000000002',
+   'Car not cleaned in driver seat area',
+   'Inner cleaning of car was missed near the driver seat last time.',
+   'in_progress', 'low',
+   '2026-03-16 15:00:00+05:30');
+
+-- ── PR3 Customer Sessions (long-lived; for easy dev login) ───────────
+
+INSERT INTO customer_sessions (id, customer_id, session_token, expires_at) VALUES
+  ('ec100000-0000-0000-0000-000000000001',
+   'ee000000-0000-0000-0000-000000000001',
+   'seed-customer-session-token-rahul-verma-pr3-c1',
+   '2027-12-31 23:59:59+05:30'),
+  ('ec100000-0000-0000-0000-000000000002',
+   'ee000000-0000-0000-0000-000000000002',
+   'seed-customer-session-token-neha-gupta-pr3-c2',
+   '2027-12-31 23:59:59+05:30');
+
+-- ── END OF SEED V2 ────────────────────────────────────────────────────

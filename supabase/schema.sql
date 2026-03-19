@@ -18,7 +18,20 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'plan_request_status') THEN
     CREATE TYPE plan_request_status AS ENUM ('submitted', 'under_process', 'finalized', 'paid', 'cancelled');
   END IF;
+END $$;
 
+-- Expand plan_request_status with full lifecycle values (PR3) — safe for existing installs
+-- ALTER TYPE ADD VALUE IF NOT EXISTS is supported in Postgres 9.3+ (Supabase uses 14+)
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'cart_in_progress';
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'captain_allocation_pending';
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'captain_review_pending';
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'payment_pending';
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'active';
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'paused';
+ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'completed';
+
+DO $$
+BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
     CREATE TYPE payment_status AS ENUM ('pending', 'succeeded', 'failed');
   END IF;
@@ -570,9 +583,17 @@ CREATE TABLE IF NOT EXISTS locations (
   name        text NOT NULL,
   city        text,
   sector      text,
+  state       text,
+  pincode     text,
+  is_active   boolean NOT NULL DEFAULT true,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+
+-- Add missing columns to locations (safe for existing installs)
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS state text;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS pincode text;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS staff_accounts (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),

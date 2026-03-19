@@ -2,20 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getStaffFromRequest, hashPassword } from "@/lib/staff-session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const staff = await getStaffFromRequest();
-    if (!staff || staff.role !== "admin") {
+    if (!staff || !["admin", "ops_lead", "manager"].includes(staff.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabaseAdmin
+    const { searchParams } = new URL(req.url);
+    const roleFilter = searchParams.get("role");
+    const statusFilter = searchParams.get("status");
+
+    let query = supabaseAdmin
       .from("staff_accounts")
       .select(
         `id, phone, name, email, role, status, location_id, reports_to,
          locations(id, name, city)`
       )
       .order("name");
+
+    if (roleFilter) query = query.eq("role", roleFilter);
+    if (statusFilter) query = query.eq("status", statusFilter);
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
