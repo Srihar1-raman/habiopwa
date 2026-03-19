@@ -19,7 +19,7 @@ export async function GET() {
     ] = await Promise.all([
       supabaseAdmin
         .from("plan_requests")
-        .select("customer_id", { count: "exact", head: false })
+        .select("customer_id")
         .eq("status", "paid"),
       supabaseAdmin
         .from("plan_requests")

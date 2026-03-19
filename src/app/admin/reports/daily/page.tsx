@@ -80,7 +80,7 @@ export default function DailyReportsPage() {
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-900">
-              Report for {new Date(report.report_date + "T00:00:00").toLocaleDateString("en-IN", {
+              Report for {new Date(report.report_date.replace(/-/g, "/")).toLocaleDateString("en-IN", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
