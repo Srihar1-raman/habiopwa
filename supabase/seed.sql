@@ -34,6 +34,11 @@ DELETE FROM job_pricing;
 DELETE FROM job_expectations;
 DELETE FROM service_jobs;
 DELETE FROM service_categories;
+-- Staff auth tables (PR1)
+DELETE FROM provider_team_assignments;
+DELETE FROM staff_sessions;
+DELETE FROM staff_accounts;
+DELETE FROM locations;
 
 
 -- ── 2. Service Categories ──────────────────────────────────────
@@ -664,19 +669,29 @@ INSERT INTO job_expectations (job_id, sort_order, text) VALUES
 
 -- Provider UUID scheme: a0000000-0000-0000-0000-0000000000NN (NN = provider number)
 -- All characters are valid hex digits (0-9, a-f).
-INSERT INTO service_providers (id, phone, name, specialization, is_active, status) VALUES
-  ('a0000000-0000-0000-0000-000000000001', '+919900000001', 'Ravi Kumar',   'Housekeeping', true, 'available'),
-  ('a0000000-0000-0000-0000-000000000002', '+919900000002', 'Sunita Devi',  'Cooking',      true, 'available'),
-  ('a0000000-0000-0000-0000-000000000003', '+919900000003', 'Arjun Sharma', 'Electrician',  true, 'available'),
-  ('a0000000-0000-0000-0000-000000000004', '+919900000004', 'Mohan Singh',  'Plumber',      true, 'available'),
-  ('a0000000-0000-0000-0000-000000000005', '+919900000005', 'Priya Nair',   'Housekeeping', true, 'available'),
-  ('a0000000-0000-0000-0000-000000000006', '+919900000006', 'Ramesh Gupta', 'Carpenter',    true, 'available'),
-  ('a0000000-0000-0000-0000-000000000007', '+919900000007', 'Deepa Kumari', 'Car Care',     true, 'available')
+INSERT INTO service_providers (id, phone, name, specialization, is_active, status, aadhaar, address, permanent_address) VALUES
+-- specialization codes match masterdata classes:
+--   HKP1=Housekeeping General, HKP2=Housekeeping Washroom, HKP3=Housekeeping Ironing
+--   KCH=Kitchen/Cook, CCR=Car Care, GCR=Garden Care
+--   HMT=Technician Home Maintenance, SMT=Technician Specialist Maintenance
+  ('a0000000-0000-0000-0000-000000000001', '+919900000001', 'Ravi Kumar',    'HKP1', true, 'available', '1234-5678-0001', 'House 12, Sector 10, Gurugram', 'Village Ravi, UP'),
+  ('a0000000-0000-0000-0000-000000000002', '+919900000002', 'Sunita Devi',   'KCH',  true, 'available', '1234-5678-0002', 'Flat 3B, Sector 50, Gurugram', 'Village Sunita, Bihar'),
+  ('a0000000-0000-0000-0000-000000000003', '+919900000003', 'Arjun Sharma',  'HMT',  true, 'available', '1234-5678-0003', 'Room 5, Sector 57, Gurugram', 'Village Arjun, Rajasthan'),
+  ('a0000000-0000-0000-0000-000000000004', '+919900000004', 'Mohan Singh',   'SMT',  true, 'available', '1234-5678-0004', 'Room 8, Sector 58, Gurugram', 'Village Mohan, MP'),
+  ('a0000000-0000-0000-0000-000000000005', '+919900000005', 'Priya Nair',    'HKP1', true, 'available', '1234-5678-0005', 'Flat 6A, Sector 70, Gurugram', 'Village Priya, Kerala'),
+  ('a0000000-0000-0000-0000-000000000006', '+919900000006', 'Ramesh Gupta',  'HKP2', true, 'available', '1234-5678-0006', 'House 22, Sector 71, Gurugram', 'Village Ramesh, UP'),
+  ('a0000000-0000-0000-0000-000000000007', '+919900000007', 'Deepa Kumari',  'CCR',  true, 'available', '1234-5678-0007', 'Flat 9C, Sector 55, Gurugram', 'Village Deepa, Bihar'),
+  ('a0000000-0000-0000-0000-000000000008', '+919900000008', 'Ajay Yadav',    'HKP3', true, 'available', '1234-5678-0008', 'Room 11, Sector 52, Gurugram', 'Village Ajay, Haryana'),
+  ('a0000000-0000-0000-0000-000000000009', '+919900000009', 'Rekha Bai',     'KCH',  true, 'available', '1234-5678-0009', 'House 3, Sector 75, Gurugram', 'Village Rekha, MP'),
+  ('a0000000-0000-0000-0000-000000000010', '+919900000010', 'Satish Verma',  'GCR',  true, 'available', '1234-5678-0010', 'Room 7, Sector 78, Gurugram', 'Village Satish, Rajasthan')
 ON CONFLICT (id) DO UPDATE SET
-  name           = EXCLUDED.name,
-  specialization = EXCLUDED.specialization,
-  is_active      = EXCLUDED.is_active,
-  status         = EXCLUDED.status;
+  name              = EXCLUDED.name,
+  specialization    = EXCLUDED.specialization,
+  is_active         = EXCLUDED.is_active,
+  status            = EXCLUDED.status,
+  aadhaar           = EXCLUDED.aadhaar,
+  address           = EXCLUDED.address,
+  permanent_address = EXCLUDED.permanent_address;
 
 
 -- =====================================================================
@@ -1365,3 +1380,146 @@ INSERT INTO customer_sessions (
    'seed-customer-session-token-vikram-patel-c2',
    '2027-12-31 23:59:59+05:30');
 
+
+
+-- =====================================================================
+-- STAFF AUTH SEED DATA (PR1)
+-- Deterministic UUIDs: e0…  = locations, f0… = staff_accounts
+-- =====================================================================
+
+-- ── Locations ─────────────────────────────────────────────────────────
+
+INSERT INTO locations (id, name, city, sector) VALUES
+  ('e0000000-0000-0000-0000-000000000001', 'Sector 50-56 Cluster', 'Gurugram', '50-56'),
+  ('e0000000-0000-0000-0000-000000000002', 'Sector 57-63 Cluster', 'Gurugram', '57-63'),
+  ('e0000000-0000-0000-0000-000000000003', 'Sector 70-80 Cluster', 'Gurugram', '70-80');
+
+
+-- ── Staff Accounts ────────────────────────────────────────────────────
+-- Admin & ops_lead & managers use email+password (bcrypt via pgcrypto)
+-- Supervisors use phone+OTP (no email/password)
+--
+-- Login credentials (dev only):
+--   admin@habio.in       / admin123
+--   rajesh@habio.in      / ops123
+--   priya@habio.in       / mgr123
+--   amit@habio.in        / mgr123
+--   Supervisors: OTP = last 4 digits of phone
+--     Suresh Yadav  phone=9100000001  OTP=0001
+--     Deepak Singh  phone=9100000002  OTP=0002
+--     Kavita Devi   phone=9100000003  OTP=0003
+
+INSERT INTO staff_accounts (
+  id, phone, name, email, password_hash, role, status, reports_to, location_id
+) VALUES
+  -- Admin
+  ('f0000000-0000-0000-0000-000000000001',
+   '9000000001', 'Habio Admin', 'admin@habio.in',
+   crypt('admin123', gen_salt('bf', 10)),
+   'admin', 'active', NULL, NULL),
+  -- Ops Lead
+  ('f0000000-0000-0000-0000-000000000002',
+   '9000000002', 'Rajesh Kumar', 'rajesh@habio.in',
+   crypt('ops123', gen_salt('bf', 10)),
+   'ops_lead', 'active', 'f0000000-0000-0000-0000-000000000001', NULL),
+  -- Manager 1
+  ('f0000000-0000-0000-0000-000000000003',
+   '9000000003', 'Priya Sharma', 'priya@habio.in',
+   crypt('mgr123', gen_salt('bf', 10)),
+   'manager', 'active', 'f0000000-0000-0000-0000-000000000002', NULL),
+  -- Manager 2
+  ('f0000000-0000-0000-0000-000000000004',
+   '9000000004', 'Amit Verma', 'amit@habio.in',
+   crypt('mgr123', gen_salt('bf', 10)),
+   'manager', 'active', 'f0000000-0000-0000-0000-000000000002', NULL),
+  -- Supervisor 1 (phone OTP auth, no email/password)
+  ('f0000000-0000-0000-0000-000000000005',
+   '9100000001', 'Suresh Yadav', NULL, NULL,
+   'supervisor', 'active',
+   'f0000000-0000-0000-0000-000000000003',
+   'e0000000-0000-0000-0000-000000000001'),
+  -- Supervisor 2
+  ('f0000000-0000-0000-0000-000000000006',
+   '9100000002', 'Deepak Singh', NULL, NULL,
+   'supervisor', 'active',
+   'f0000000-0000-0000-0000-000000000003',
+   'e0000000-0000-0000-0000-000000000002'),
+  -- Supervisor 3
+  ('f0000000-0000-0000-0000-000000000007',
+   '9100000003', 'Kavita Devi', NULL, NULL,
+   'supervisor', 'active',
+   'f0000000-0000-0000-0000-000000000004',
+   'e0000000-0000-0000-0000-000000000003');
+
+
+-- ── Provider Team Assignments ─────────────────────────────────────────
+-- Supervisor 1 (Suresh): providers 001, 002, 007, 008
+-- Supervisor 2 (Deepak): providers 003, 004, 006, 007  (007 shared)
+-- Supervisor 3 (Kavita): providers 005, 009, 010
+
+INSERT INTO provider_team_assignments (service_provider_id, supervisor_id) VALUES
+  -- Supervisor 1 team
+  ('a0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000005'),
+  ('a0000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000005'),
+  ('a0000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000005'),
+  ('a0000000-0000-0000-0000-000000000008', 'f0000000-0000-0000-0000-000000000005'),
+  -- Supervisor 2 team
+  ('a0000000-0000-0000-0000-000000000003', 'f0000000-0000-0000-0000-000000000006'),
+  ('a0000000-0000-0000-0000-000000000004', 'f0000000-0000-0000-0000-000000000006'),
+  ('a0000000-0000-0000-0000-000000000006', 'f0000000-0000-0000-0000-000000000006'),
+  ('a0000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000006'),  -- shared
+  -- Supervisor 3 team
+  ('a0000000-0000-0000-0000-000000000005', 'f0000000-0000-0000-0000-000000000007'),
+  ('a0000000-0000-0000-0000-000000000009', 'f0000000-0000-0000-0000-000000000007'),
+  ('a0000000-0000-0000-0000-000000000010', 'f0000000-0000-0000-0000-000000000007');
+
+
+-- ── Assign supervisors to existing plan requests ──────────────────────
+-- Customer 1 (Ananya) uses providers Ravi+Sunita → Supervisor 1
+-- Customer 2 (Vikram) uses providers Priya+Deepa → Supervisor 3
+
+UPDATE plan_requests
+  SET assigned_supervisor_id = 'f0000000-0000-0000-0000-000000000005'
+  WHERE id = 'b1000000-0000-0000-0000-000000000001';
+
+UPDATE plan_requests
+  SET assigned_supervisor_id = 'f0000000-0000-0000-0000-000000000007'
+  WHERE id = 'b2000000-0000-0000-0000-000000000002';
+
+
+-- ── Update job_allocations with supervisor_id ─────────────────────────
+
+UPDATE job_allocations
+  SET supervisor_id = 'f0000000-0000-0000-0000-000000000005'
+  WHERE service_provider_id IN (
+    'a0000000-0000-0000-0000-000000000001',
+    'a0000000-0000-0000-0000-000000000002'
+  );
+
+UPDATE job_allocations
+  SET supervisor_id = 'f0000000-0000-0000-0000-000000000007'
+  WHERE service_provider_id IN (
+    'a0000000-0000-0000-0000-000000000005',
+    'a0000000-0000-0000-0000-000000000007'
+  );
+
+
+-- ── Seed Staff Sessions (long-lived; for easy login in dev/test) ──────
+-- Copy into cookie habio_staff_session:
+--   Suresh Yadav (supervisor1) → seed-staff-session-token-suresh-yadav-sv001
+--   Kavita Devi  (supervisor3) → seed-staff-session-token-kavita-devi-sv003
+--   Habio Admin  (admin)       → seed-staff-session-token-habio-admin-adm001
+
+INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
+  ('fs000000-0000-0000-0000-000000000001',
+   'f0000000-0000-0000-0000-000000000005',
+   'seed-staff-session-token-suresh-yadav-sv001',
+   '2027-12-31 23:59:59+05:30'),
+  ('fs000000-0000-0000-0000-000000000002',
+   'f0000000-0000-0000-0000-000000000007',
+   'seed-staff-session-token-kavita-devi-sv003',
+   '2027-12-31 23:59:59+05:30'),
+  ('fs000000-0000-0000-0000-000000000003',
+   'f0000000-0000-0000-0000-000000000001',
+   'seed-staff-session-token-habio-admin-adm001',
+   '2027-12-31 23:59:59+05:30');

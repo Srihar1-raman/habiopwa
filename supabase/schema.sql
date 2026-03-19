@@ -548,3 +548,97 @@ ALTER TABLE daily_reports ENABLE ROW LEVEL SECURITY;
 
 -- RLS for service_providers (read via service role only)
 ALTER TABLE service_providers ENABLE ROW LEVEL SECURITY;
+
+
+-- =====================
+-- STAFF AUTH SYSTEM (added PR1)
+-- =====================
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'staff_role') THEN
+    CREATE TYPE staff_role AS ENUM ('admin', 'ops_lead', 'manager', 'supervisor');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'staff_status') THEN
+    CREATE TYPE staff_status AS ENUM ('active', 'inactive');
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS locations (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  city        text,
+  sector      text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS staff_accounts (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone             text UNIQUE NOT NULL,
+  name              text NOT NULL,
+  email             text UNIQUE,
+  password_hash     text,
+  role              staff_role NOT NULL,
+  status            staff_status NOT NULL DEFAULT 'active',
+  address           text,
+  permanent_address text,
+  aadhaar           text,
+  location_id       uuid REFERENCES locations(id),
+  reports_to        uuid REFERENCES staff_accounts(id),
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_accounts_phone ON staff_accounts(phone);
+CREATE INDEX IF NOT EXISTS idx_staff_accounts_email ON staff_accounts(email);
+CREATE INDEX IF NOT EXISTS idx_staff_accounts_role ON staff_accounts(role);
+CREATE INDEX IF NOT EXISTS idx_staff_accounts_reports_to ON staff_accounts(reports_to);
+ALTER TABLE staff_accounts ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS staff_sessions (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  staff_id        uuid NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
+  session_token   text UNIQUE NOT NULL,
+  expires_at      timestamptz NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_sessions_token ON staff_sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_staff_sessions_staff ON staff_sessions(staff_id);
+ALTER TABLE staff_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS provider_team_assignments (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_provider_id   uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
+  supervisor_id         uuid NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
+  assigned_at           timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT unique_provider_supervisor UNIQUE (service_provider_id, supervisor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pta_provider ON provider_team_assignments(service_provider_id);
+CREATE INDEX IF NOT EXISTS idx_pta_supervisor ON provider_team_assignments(supervisor_id);
+ALTER TABLE provider_team_assignments ENABLE ROW LEVEL SECURITY;
+
+-- Add supervisor assignment to plan_requests
+ALTER TABLE plan_requests ADD COLUMN IF NOT EXISTS assigned_supervisor_id uuid REFERENCES staff_accounts(id);
+CREATE INDEX IF NOT EXISTS idx_plan_requests_supervisor ON plan_requests(assigned_supervisor_id);
+
+-- Add supervisor tracking to job_allocations
+ALTER TABLE job_allocations ADD COLUMN IF NOT EXISTS supervisor_id uuid REFERENCES staff_accounts(id);
+CREATE INDEX IF NOT EXISTS idx_job_allocations_supervisor ON job_allocations(supervisor_id);
+
+-- Add missing fields to service_providers
+ALTER TABLE service_providers ADD COLUMN IF NOT EXISTS aadhaar text;
+ALTER TABLE service_providers ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE service_providers ADD COLUMN IF NOT EXISTS permanent_address text;
+
+-- =====================
+-- PR2/PR3 CONTEXT NOTES:
+-- The admin portal (PR2) will use staff_accounts + staff_sessions for auth.
+-- API routes under /api/admin/* should use requireRole(['admin','ops_lead','manager']).
+-- The hierarchy is: admin → ops_lead → manager → supervisor (via reports_to column).
+-- provider_team_assignments maps providers to supervisors (many-to-many).
+-- plan_requests.assigned_supervisor_id tracks which supervisor owns a plan.
+-- To get all data visible to a manager: find their supervisors via reports_to,
+--   then find those supervisors' providers via provider_team_assignments.
+-- Locations table is primarily for supervisor cluster assignment.
+-- =====================

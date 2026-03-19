@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest, getSupervisorProviderIds } from "@/lib/staff-session";
 
+// Auth: supervisor session required (added PR1)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ date: string }> }
 ) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const providerIds = await getSupervisorProviderIds(staff.id);
   const { date } = await params;
+
+  if (providerIds.length === 0) {
+    const emptySummary = { total: 0, completed: 0, completed_delayed: 0, delayed: 0, cancelled: 0, incomplete: 0 };
+    return NextResponse.json({ allocations: [], summary: emptySummary, date });
+  }
 
   const { data: allocations, error } = await supabaseAdmin
     .from("job_allocations")
@@ -13,6 +26,7 @@ export async function GET(
       "*, service_providers(name), plan_request_items(title), customers(name)"
     )
     .eq("scheduled_date", date)
+    .in("service_provider_id", providerIds)
     .order("scheduled_start_time", { ascending: true });
 
   if (error) {

@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest, getSupervisorProviderIds } from "@/lib/staff-session";
 
+// Auth: supervisor session required (added PR1)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ allocationId: string }> }
 ) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { allocationId } = await params;
   const body = await req.json();
   const { service_provider_id } = body;
@@ -13,15 +20,27 @@ export async function PATCH(
     return NextResponse.json({ error: "service_provider_id is required" }, { status: 400 });
   }
 
+  const providerIds = await getSupervisorProviderIds(staff.id);
+
   // Fetch current allocation to get date and time window
   const { data: current, error: fetchError } = await supabaseAdmin
     .from("job_allocations")
-    .select("id, scheduled_date, scheduled_start_time, scheduled_end_time")
+    .select("id, scheduled_date, scheduled_start_time, scheduled_end_time, service_provider_id")
     .eq("id", allocationId)
     .single();
 
   if (fetchError || !current) {
     return NextResponse.json({ error: "Allocation not found" }, { status: 404 });
+  }
+
+  // Verify current allocation belongs to this supervisor's team
+  if (!providerIds.includes(current.service_provider_id)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Verify target provider also belongs to this supervisor's team
+  if (!providerIds.includes(service_provider_id)) {
+    return NextResponse.json({ error: "Target provider not in your team" }, { status: 403 });
   }
 
   // Validate no time overlap for new provider
