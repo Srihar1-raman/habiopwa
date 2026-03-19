@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ date: string }> }
 ) {
   const staff = await getStaffFromRequest();
-  if (!staff || staff.role !== "supervisor") {
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

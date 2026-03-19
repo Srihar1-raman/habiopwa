@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  Network,
 } from "lucide-react";
 
 interface StaffInfo {
@@ -52,6 +53,7 @@ const ADMIN_NAV: NavSection[] = [
     section: "Operations",
     items: [
       { label: "Staff Management", href: "/admin/operations/staff", icon: <UserCog size={16} /> },
+      { label: "Manage Teams", href: "/admin/operations/manage-teams", icon: <Network size={16} /> },
       { label: "Locations", href: "/admin/operations/locations", icon: <MapPin size={16} /> },
       { label: "Provider Teams", href: "/admin/operations/provider-teams", icon: <UsersRound size={16} /> },
       { label: "Issue Tickets", href: "/admin/operations/issues", icon: <AlertTriangle size={16} /> },
@@ -75,6 +77,7 @@ const OPS_LEAD_NAV: NavSection[] = [
     section: "Operations",
     items: [
       { label: "Staff Management", href: "/admin/operations/staff", icon: <UserCog size={16} /> },
+      { label: "Manage Teams", href: "/admin/operations/manage-teams", icon: <Network size={16} /> },
       { label: "Locations", href: "/admin/operations/locations", icon: <MapPin size={16} /> },
       { label: "Provider Teams", href: "/admin/operations/provider-teams", icon: <UsersRound size={16} /> },
       { label: "Issue Tickets", href: "/admin/operations/issues", icon: <AlertTriangle size={16} /> },

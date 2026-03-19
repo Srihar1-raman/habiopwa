@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest } from "@/lib/staff-session";
 
 export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ pauseRequestId: string }> }
 ) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { pauseRequestId } = await params;
 
   // Fetch the pause request to get date range and plan_request_id

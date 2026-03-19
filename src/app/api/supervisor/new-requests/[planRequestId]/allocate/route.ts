@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getStaffFromRequest } from "@/lib/staff-session";
 
 interface Allocation {
   plan_request_item_id: string;
@@ -13,6 +14,11 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ planRequestId: string }> }
 ) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { planRequestId } = await params;
   const body = await req.json();
   const allocations: Allocation[] = body.allocations;

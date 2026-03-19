@@ -5,7 +5,7 @@ import { getStaffFromRequest } from "@/lib/staff-session";
 // Auth: supervisor session required (added PR1)
 export async function GET() {
   const staff = await getStaffFromRequest();
-  if (!staff || staff.role !== "supervisor") {
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
