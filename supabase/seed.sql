@@ -1532,9 +1532,10 @@ INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
 --   e0000000-…000004/005 = new specific locations
 --   dd000000-… = new service providers
 --   ee000000-… = new customers (PR3 lifecycle stages)
---   pb000000-… = new plan requests
---   pt000000-… = new plan request items
---   jj000000-… = new job allocations
+--   b3000000-… = new plan requests
+--   b6000000-… = new plan request items
+--   ca000000-… = new job allocations
+--   da000000-… = new issue tickets
 -- =====================================================================
 
 
@@ -1683,7 +1684,7 @@ INSERT INTO cart_items (
 
 
 -- ── PR3 Plan Requests ─────────────────────────────────────────────────
--- pb000000-… prefix
+-- b3000000-… prefix
 -- C1 Rahul: active, Suresh (supervisor 1)
 -- C2 Neha: active, Deepak/Ramesh (supervisor 2)
 -- C3 Vikram: captain_review_pending, Suresh
@@ -1696,27 +1697,27 @@ INSERT INTO plan_requests (
   total_price_monthly, plan_start_date, is_recurring,
   assigned_supervisor_id
 ) VALUES
-  ('pb000000-0000-0000-0000-000000000001',
+  ('b3000000-0000-0000-0000-000000000001',
    'ee000000-0000-0000-0000-000000000001',
    'HAB-PR3-001', 'active', 6500.00, '2026-02-01', true,
    'f0000000-0000-0000-0000-000000000005'), -- Suresh
-  ('pb000000-0000-0000-0000-000000000002',
+  ('b3000000-0000-0000-0000-000000000002',
    'ee000000-0000-0000-0000-000000000002',
    'HAB-PR3-002', 'active', 5800.00, '2026-02-15', true,
    'f0000000-0000-0000-0000-000000000006'), -- Deepak/Ramesh
-  ('pb000000-0000-0000-0000-000000000003',
+  ('b3000000-0000-0000-0000-000000000003',
    'ee000000-0000-0000-0000-000000000003',
    'HAB-PR3-003', 'captain_review_pending', 7200.00, NULL, true,
    'f0000000-0000-0000-0000-000000000005'), -- Suresh
-  ('pb000000-0000-0000-0000-000000000004',
+  ('b3000000-0000-0000-0000-000000000004',
    'ee000000-0000-0000-0000-000000000004',
    'HAB-PR3-004', 'payment_pending', 5200.00, NULL, true,
    'f0000000-0000-0000-0000-000000000006'), -- Deepak/Ramesh
-  ('pb000000-0000-0000-0000-000000000005',
+  ('b3000000-0000-0000-0000-000000000005',
    'ee000000-0000-0000-0000-000000000005',
    'HAB-PR3-005', 'captain_allocation_pending', 6000.00, NULL, true,
    NULL), -- no supervisor yet
-  ('pb000000-0000-0000-0000-000000000008',
+  ('b3000000-0000-0000-0000-000000000008',
    'ee000000-0000-0000-0000-000000000008',
    'HAB-PR3-008', 'active', 7500.00, '2026-03-01', true,
    'f0000000-0000-0000-0000-000000000007'); -- Kavita
@@ -1733,8 +1734,8 @@ INSERT INTO plan_request_items (
   is_addon
 ) VALUES
   -- Rahul (C1): HKP daily + Kitchen morning
-  ('pt000000-0000-0000-0001-000000000001',
-   'pb000000-0000-0000-0000-000000000001',
+  ('b6000000-0000-0000-0001-000000000001',
+   'b3000000-0000-0000-0000-000000000001',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
    'Dusting, Brooming, Mopping',
@@ -1743,8 +1744,8 @@ INSERT INTO plan_request_items (
    NULL, 'standard', 4455.00,
    3118.50, 4455.00,
    false),
-  ('pt000000-0000-0000-0001-000000000002',
-   'pb000000-0000-0000-0000-000000000001',
+  ('b6000000-0000-0000-0001-000000000002',
+   'b3000000-0000-0000-0000-000000000001',
    (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000002',
    'Daily Cooking - Morning Shift',
@@ -1754,8 +1755,8 @@ INSERT INTO plan_request_items (
    5040.00, 7200.00,
    false),
   -- Neha (C2): HKP daily + Car Care
-  ('pt000000-0000-0000-0002-000000000001',
-   'pb000000-0000-0000-0000-000000000002',
+  ('b6000000-0000-0000-0002-000000000001',
+   'b3000000-0000-0000-0000-000000000002',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
    'Dusting, Brooming, Mopping',
@@ -1764,8 +1765,8 @@ INSERT INTO plan_request_items (
    NULL, 'standard', 4455.00,
    3118.50, 4455.00,
    false),
-  ('pt000000-0000-0000-0002-000000000002',
-   'pb000000-0000-0000-0000-000000000002',
+  ('b6000000-0000-0000-0002-000000000002',
+   'b3000000-0000-0000-0000-000000000002',
    (SELECT id FROM service_jobs WHERE code = 'CCR-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000003',
    'Basic Car Care Routine',
@@ -1775,8 +1776,8 @@ INSERT INTO plan_request_items (
    1178.10, 1683.00,
    false),
   -- Vikram (C3): HKP + Kitchen (review pending)
-  ('pt000000-0000-0000-0003-000000000001',
-   'pb000000-0000-0000-0000-000000000003',
+  ('b6000000-0000-0000-0003-000000000001',
+   'b3000000-0000-0000-0000-000000000003',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
    'Dusting, Brooming, Mopping',
@@ -1786,8 +1787,8 @@ INSERT INTO plan_request_items (
    3118.50, 4455.00,
    false),
   -- Shreya (C8): HKP + Garden
-  ('pt000000-0000-0000-0008-000000000001',
-   'pb000000-0000-0000-0000-000000000008',
+  ('b6000000-0000-0000-0008-000000000001',
+   'b3000000-0000-0000-0000-000000000008',
    (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000001',
    'Dusting, Brooming, Mopping',
@@ -1796,8 +1797,8 @@ INSERT INTO plan_request_items (
    NULL, 'standard', 4455.00,
    3118.50, 4455.00,
    false),
-  ('pt000000-0000-0000-0008-000000000002',
-   'pb000000-0000-0000-0000-000000000008',
+  ('b6000000-0000-0000-0008-000000000002',
+   'b3000000-0000-0000-0000-000000000008',
    (SELECT id FROM service_jobs WHERE code = 'GCR-CR-D-1A' LIMIT 1),
    '00000000-0000-0000-0000-000000000004',
    'Basic Garden Care Routine',
@@ -1811,27 +1812,27 @@ INSERT INTO plan_request_items (
 -- ── PR3 Plan Request Events ────────────────────────────────────────────
 
 INSERT INTO plan_request_events (plan_request_id, event_type, note, created_at) VALUES
-  ('pb000000-0000-0000-0000-000000000001', 'submitted',  'Customer submitted plan request', '2026-01-25 10:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000001', 'supervisor_assigned', 'Assigned to Suresh Yadav', '2026-01-26 11:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000001', 'captain_reviewed', 'On-site review completed', '2026-01-28 15:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000001', 'payment_received', 'First payment received', '2026-01-31 18:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000001', 'status_changed', 'Plan activated', '2026-02-01 09:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000002', 'submitted',  'Customer submitted plan request', '2026-02-08 14:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000002', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-02-09 10:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000002', 'captain_reviewed', 'On-site review completed', '2026-02-11 16:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000002', 'payment_received', 'First payment received', '2026-02-14 20:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000002', 'status_changed', 'Plan activated', '2026-02-15 09:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000003', 'submitted',  'Customer submitted plan request', '2026-03-10 11:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000003', 'supervisor_assigned', 'Assigned to Suresh Yadav for review', '2026-03-11 09:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000004', 'submitted',  'Customer submitted plan request', '2026-03-12 12:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000004', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-03-13 10:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000004', 'captain_reviewed', 'On-site review done, payment link sent', '2026-03-15 14:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000005', 'submitted',  'Customer submitted plan request', '2026-03-17 09:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000008', 'submitted',  'Customer submitted plan request', '2026-02-22 10:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000008', 'supervisor_assigned', 'Assigned to Kavita Devi', '2026-02-23 11:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000008', 'captain_reviewed', 'On-site review completed', '2026-02-25 15:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000008', 'payment_received', 'First payment received', '2026-02-28 18:00:00+05:30'),
-  ('pb000000-0000-0000-0000-000000000008', 'status_changed', 'Plan activated', '2026-03-01 09:00:00+05:30');
+  ('b3000000-0000-0000-0000-000000000001', 'submitted',  'Customer submitted plan request', '2026-01-25 10:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000001', 'supervisor_assigned', 'Assigned to Suresh Yadav', '2026-01-26 11:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000001', 'captain_reviewed', 'On-site review completed', '2026-01-28 15:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000001', 'payment_received', 'First payment received', '2026-01-31 18:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000001', 'status_changed', 'Plan activated', '2026-02-01 09:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000002', 'submitted',  'Customer submitted plan request', '2026-02-08 14:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000002', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-02-09 10:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000002', 'captain_reviewed', 'On-site review completed', '2026-02-11 16:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000002', 'payment_received', 'First payment received', '2026-02-14 20:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000002', 'status_changed', 'Plan activated', '2026-02-15 09:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000003', 'submitted',  'Customer submitted plan request', '2026-03-10 11:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000003', 'supervisor_assigned', 'Assigned to Suresh Yadav for review', '2026-03-11 09:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000004', 'submitted',  'Customer submitted plan request', '2026-03-12 12:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000004', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-03-13 10:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000004', 'captain_reviewed', 'On-site review done, payment link sent', '2026-03-15 14:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000005', 'submitted',  'Customer submitted plan request', '2026-03-17 09:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000008', 'submitted',  'Customer submitted plan request', '2026-02-22 10:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000008', 'supervisor_assigned', 'Assigned to Kavita Devi', '2026-02-23 11:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000008', 'captain_reviewed', 'On-site review completed', '2026-02-25 15:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000008', 'payment_received', 'First payment received', '2026-02-28 18:00:00+05:30'),
+  ('b3000000-0000-0000-0000-000000000008', 'status_changed', 'Plan activated', '2026-03-01 09:00:00+05:30');
 
 
 -- ── PR3 Job Allocations (for active plans — Rahul C1, Neha C2, Shreya C8) ──
@@ -1841,39 +1842,39 @@ INSERT INTO job_allocations (
   supervisor_id, scheduled_date, scheduled_start_time, scheduled_end_time, status, is_locked
 ) VALUES
   -- Rahul (C1): HKP by Lakshmi, Kitchen by Sunita — today
-  ('jj000000-0000-0000-0001-000000000001',
-   'pb000000-0000-0000-0000-000000000001',
-   'pt000000-0000-0000-0001-000000000001',
+  ('ca000000-0000-0000-0001-000000000001',
+   'b3000000-0000-0000-0000-000000000001',
+   'b6000000-0000-0000-0001-000000000001',
    'dd000000-0000-0000-0000-000000000001',
    'ee000000-0000-0000-0000-000000000001',
    'f0000000-0000-0000-0000-000000000005',
    CURRENT_DATE, '07:00', '07:45', 'scheduled', false),
-  ('jj000000-0000-0000-0001-000000000002',
-   'pb000000-0000-0000-0000-000000000001',
-   'pt000000-0000-0000-0001-000000000002',
+  ('ca000000-0000-0000-0001-000000000002',
+   'b3000000-0000-0000-0000-000000000001',
+   'b6000000-0000-0000-0001-000000000002',
    'dd000000-0000-0000-0000-000000000004',
    'ee000000-0000-0000-0000-000000000001',
    'f0000000-0000-0000-0000-000000000005',
    CURRENT_DATE, '08:30', '09:30', 'scheduled', false),
   -- Neha (C2): HKP by Meena, Car Care by Raju — today
-  ('jj000000-0000-0000-0002-000000000001',
-   'pb000000-0000-0000-0000-000000000002',
-   'pt000000-0000-0000-0002-000000000001',
+  ('ca000000-0000-0000-0002-000000000001',
+   'b3000000-0000-0000-0000-000000000002',
+   'b6000000-0000-0000-0002-000000000001',
    'dd000000-0000-0000-0000-000000000002',
    'ee000000-0000-0000-0000-000000000002',
    'f0000000-0000-0000-0000-000000000006',
    CURRENT_DATE, '08:00', '08:45', 'scheduled', false),
-  ('jj000000-0000-0000-0002-000000000002',
-   'pb000000-0000-0000-0000-000000000002',
-   'pt000000-0000-0000-0002-000000000002',
+  ('ca000000-0000-0000-0002-000000000002',
+   'b3000000-0000-0000-0000-000000000002',
+   'b6000000-0000-0000-0002-000000000002',
    'dd000000-0000-0000-0000-000000000007',
    'ee000000-0000-0000-0000-000000000002',
    'f0000000-0000-0000-0000-000000000006',
    CURRENT_DATE, '07:00', '07:15', 'scheduled', false),
   -- Shreya (C8): HKP by Geeta (Kavita team) — today
-  ('jj000000-0000-0000-0008-000000000001',
-   'pb000000-0000-0000-0000-000000000008',
-   'pt000000-0000-0000-0008-000000000001',
+  ('ca000000-0000-0000-0008-000000000001',
+   'b3000000-0000-0000-0000-000000000008',
+   'b6000000-0000-0000-0008-000000000001',
    'dd000000-0000-0000-0000-000000000003',
    'ee000000-0000-0000-0000-000000000008',
    'f0000000-0000-0000-0000-000000000007',
@@ -1885,16 +1886,16 @@ INSERT INTO job_allocations (
 INSERT INTO issue_tickets (
   id, customer_id, plan_request_id, title, description, status, priority, created_at
 ) VALUES
-  ('it000000-0000-0000-0000-000000000001',
+  ('da000000-0000-0000-0000-000000000001',
    'ee000000-0000-0000-0000-000000000001',
-   'pb000000-0000-0000-0000-000000000001',
+   'b3000000-0000-0000-0000-000000000001',
    'Mop not cleaned properly',
    'The housekeeper left the mop dirty yesterday. Please ensure it is cleaned after use.',
    'open', 'medium',
    '2026-03-17 09:00:00+05:30'),
-  ('it000000-0000-0000-0000-000000000002',
+  ('da000000-0000-0000-0000-000000000002',
    'ee000000-0000-0000-0000-000000000002',
-   'pb000000-0000-0000-0000-000000000002',
+   'b3000000-0000-0000-0000-000000000002',
    'Car not cleaned in driver seat area',
    'Inner cleaning of car was missed near the driver seat last time.',
    'in_progress', 'low',
