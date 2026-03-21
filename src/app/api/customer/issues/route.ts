@@ -47,12 +47,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
 
-  // Fetch the customer's active paid plan to associate the ticket
+  // Fetch the customer's active plan to associate the ticket
   const { data: planRequest } = await supabaseAdmin
     .from("plan_requests")
     .select("id")
     .eq("customer_id", customer.id)
-    .eq("status", "paid")
+    .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

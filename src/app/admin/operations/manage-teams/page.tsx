@@ -8,8 +8,8 @@ interface Provider {
   id: string;
   name: string;
   phone: string;
-  specialization: string | null;
-  is_active: boolean;
+  provider_type: string | null;
+  status: string;
 }
 
 interface ProviderAssignment {
@@ -99,11 +99,11 @@ function SupervisorCard({ sv }: { sv: Supervisor }) {
                   <span className="w-2 h-2 rounded-full bg-blue-300 shrink-0" />
                   <span className="font-medium">{pa.provider.name}</span>
                   <span className="text-gray-400">{pa.provider.phone}</span>
-                  {pa.provider.specialization && (
-                    <span className="text-gray-400 italic">{pa.provider.specialization}</span>
+                  {pa.provider.provider_type && (
+                    <span className="text-gray-400 italic">{pa.provider.provider_type.replace(/_/g, " ")}</span>
                   )}
-                  {!pa.provider.is_active && (
-                    <span className="bg-red-100 text-red-600 px-1 rounded">inactive</span>
+                  {pa.provider.status !== "available" && (
+                    <span className="bg-red-100 text-red-600 px-1 rounded">{pa.provider.status}</span>
                   )}
                 </div>
               ) : null

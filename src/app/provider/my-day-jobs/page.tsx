@@ -44,7 +44,7 @@ interface Provider {
   id: string;
   name: string;
   phone: string;
-  specialization: string;
+  provider_type: string | null;
   status: string;
 }
 

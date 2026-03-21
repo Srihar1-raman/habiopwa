@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from("service_providers")
-    .select("id, name, phone, specialization, status, is_active")
+    .select("id, name, phone, provider_type, status")
     .eq("id", provider.id)
     .single();
 
@@ -27,9 +27,8 @@ export async function GET(_req: NextRequest) {
       id: data.id,
       name: data.name,
       phone: data.phone,
-      specialization: data.specialization,
+      provider_type: data.provider_type,
       status: data.status,
-      is_active: data.is_active,
     },
   });
 }

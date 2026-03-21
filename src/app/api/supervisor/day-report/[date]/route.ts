@@ -44,17 +44,5 @@ export async function GET(
     incomplete: list.filter((a) => a.status === "incomplete").length,
   };
 
-  // Upsert daily_reports record for this date
-  await supabaseAdmin.from("daily_reports").upsert(
-    {
-      report_date: date,
-      total_jobs_scheduled: summary.total,
-      total_jobs_completed: summary.completed,
-      total_jobs_delayed: summary.delayed,
-      total_jobs_cancelled: summary.cancelled,
-    },
-    { onConflict: "report_date" }
-  );
-
   return NextResponse.json({ allocations: list, summary, date });
 }

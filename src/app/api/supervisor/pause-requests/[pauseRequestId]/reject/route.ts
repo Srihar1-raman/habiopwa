@@ -15,7 +15,7 @@ export async function PATCH(
 
   const { error } = await supabaseAdmin
     .from("pause_requests")
-    .update({ supervisor_approval_status: "rejected" })
+    .update({ status: "rejected" })
     .eq("id", pauseRequestId);
 
   if (error) {

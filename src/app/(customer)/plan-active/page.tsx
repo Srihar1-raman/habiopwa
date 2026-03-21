@@ -47,7 +47,7 @@ interface Job {
   actual_end_time: string | null;
   status: string;
   plan_request_items: { title: string; frequency_label: string } | null;
-  service_providers: { name: string; specialization: string | null } | null;
+  service_providers: { name: string; provider_type: string | null } | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {

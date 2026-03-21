@@ -17,7 +17,7 @@ interface PauseRequest {
   pause_type: string;
   pause_start_date: string | null;
   pause_end_date: string | null;
-  supervisor_approval_status: string;
+  status: string;
   reason: string | null;
   customers: { name: string | null; phone: string } | null;
   plan_requests: { request_code: string } | null;
@@ -93,10 +93,10 @@ export default function PauseRequestsPage() {
                 )}
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    APPROVAL_COLORS[req.supervisor_approval_status] ?? "bg-gray-100 text-gray-600"
+                    APPROVAL_COLORS[req.status] ?? "bg-gray-100 text-gray-600"
                   }`}
                 >
-                  {req.supervisor_approval_status}
+                  {req.status}
                 </span>
               </div>
               <p className="font-semibold text-gray-900">
@@ -120,7 +120,7 @@ export default function PauseRequestsPage() {
               {req.reason && (
                 <p className="text-xs text-gray-500 mt-2 italic">{req.reason}</p>
               )}
-              {req.supervisor_approval_status === "pending" && (
+              {req.status === "pending" && (
                 <div className="flex gap-2 mt-3">
                   <Button
                     size="sm"

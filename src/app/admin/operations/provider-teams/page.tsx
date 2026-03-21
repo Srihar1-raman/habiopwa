@@ -7,8 +7,8 @@ interface Provider {
   id: string;
   name: string;
   phone: string;
-  specialization: string | null;
-  is_active: boolean;
+  provider_type: string | null;
+  status: string;
 }
 
 interface AssignmentEntry {
@@ -29,7 +29,7 @@ interface ServiceProvider {
   id: string;
   name: string;
   phone: string;
-  specialization: string | null;
+  provider_type: string | null;
 }
 
 export default function ProviderTeamsPage() {
@@ -158,9 +158,9 @@ export default function ProviderTeamsPage() {
                         <p className="text-sm font-medium text-gray-800">{a.provider.name}</p>
                         <p className="text-xs text-gray-400">
                           {a.provider.phone}
-                          {a.provider.specialization ? ` · ${a.provider.specialization}` : ""}
-                          {!a.provider.is_active && (
-                            <span className="ml-1 text-red-500">(inactive)</span>
+                          {a.provider.provider_type ? ` · ${a.provider.provider_type.replace(/_/g, ' ')}` : ""}
+                          {a.provider.status !== "available" && (
+                            <span className="ml-1 text-red-500">({a.provider.status})</span>
                           )}
                         </p>
                       </div>
@@ -211,7 +211,7 @@ export default function ProviderTeamsPage() {
                   <option value="">Select provider…</option>
                   {allProviders.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}{p.specialization ? ` (${p.specialization})` : ""}
+                      {p.name}{p.provider_type ? ` (${p.provider_type.replace(/_/g, ' ')})` : ""}
                     </option>
                   ))}
                 </select>

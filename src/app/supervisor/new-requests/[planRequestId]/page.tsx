@@ -33,7 +33,7 @@ interface RequestDetail {
 interface Provider {
   id: string;
   name: string;
-  specialization: string | null;
+  provider_type: string | null;
 }
 
 interface AllocationRow {
@@ -67,7 +67,7 @@ export default function NewRequestAllocatePage() {
       setProviders(teamData.providers ?? []);
 
       // For paid/finalized plans, only show addon items; otherwise show all items
-      const isPaidPlan = req?.status === "paid" || req?.status === "finalized";
+      const isPaidPlan = req?.status === "active";
       const itemsToAllocate = isPaidPlan
         ? (req?.plan_request_items ?? []).filter((i) => i.is_addon)
         : (req?.plan_request_items ?? []);
@@ -137,7 +137,7 @@ export default function NewRequestAllocatePage() {
   }
 
   const profile = request.customers?.customer_profiles;
-  const isPaidPlan = request.status === "paid" || request.status === "finalized";
+  const isPaidPlan = request.status === "active";
 
   // For paid plans, only allocate the new addon items
   const itemsToAllocate = isPaidPlan
@@ -226,7 +226,7 @@ export default function NewRequestAllocatePage() {
                     <option value="">Select provider</option>
                     {providers.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name}{p.specialization ? ` · ${p.specialization}` : ""}
+                        {p.name}{p.provider_type ? ` · ${p.provider_type.replace(/_/g, ' ')}` : ""}
                       </option>
                     ))}
                   </select>

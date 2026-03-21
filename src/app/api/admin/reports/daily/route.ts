@@ -16,19 +16,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "date query param required" }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("daily_reports")
-      .select(
-        "id, report_date, total_jobs_scheduled, total_jobs_completed, total_jobs_delayed, total_jobs_cancelled, breakage_count, summary_notes"
-      )
-      .eq("report_date", date)
-      .maybeSingle();
+    // daily_reports table has been removed. Compute on-the-fly from job_allocations.
+    const { data: allocations, error } = await supabaseAdmin
+      .from("job_allocations")
+      .select("id, status")
+      .eq("scheduled_date", date);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ report: data ?? null });
+    const list = allocations ?? [];
+    const report = {
+      report_date: date,
+      total_jobs_scheduled: list.length,
+      total_jobs_completed: list.filter(
+        (a) => a.status === "completed" || a.status === "completed_delayed"
+      ).length,
+      total_jobs_delayed: list.filter(
+        (a) => a.status === "completed_delayed" || a.status === "in_progress_delayed"
+      ).length,
+      total_jobs_cancelled: list.filter(
+        (a) => a.status === "cancelled" || a.status === "cancelled_by_customer"
+      ).length,
+    };
+
+    return NextResponse.json({ report });
   } catch (err) {
     console.error("Daily report error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

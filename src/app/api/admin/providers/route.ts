@@ -11,7 +11,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("service_providers")
-      .select("id, name, phone, specialization, is_active")
+      .select("id, name, phone, provider_type, status")
       .order("name");
 
     if (error) {

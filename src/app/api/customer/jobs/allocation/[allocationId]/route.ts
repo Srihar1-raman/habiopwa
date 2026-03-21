@@ -18,7 +18,7 @@ export async function GET(
     .select(
       `
       *,
-      service_providers(name, specialization),
+      service_providers(name, provider_type),
       plan_request_items(title, frequency_label, unit_type, unit_value)
     `
     )

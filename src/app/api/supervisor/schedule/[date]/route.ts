@@ -22,7 +22,7 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("job_allocations")
     .select(
-      "*, service_providers(name, specialization), plan_request_items(title), customers(name, customer_profiles(flat_no, society))"
+      "*, service_providers(name, provider_type), plan_request_items(title), customers(name, customer_profiles(flat_no, society))"
     )
     .eq("scheduled_date", date)
     .in("service_provider_id", providerIds)

@@ -24,7 +24,8 @@ export async function POST(
     .insert({
       issue_ticket_id: ticketId,
       comment_text,
-      commented_by: "supervisor",
+      commenter_id: staff.id,
+      commenter_type: "supervisor",
     })
     .select()
     .single();

@@ -13,7 +13,7 @@ interface Job {
   actual_end_time: string | null;
   status: string;
   is_locked: boolean;
-  service_providers: { name: string; specialization: string } | null;
+  service_providers: { name: string; provider_type: string | null } | null;
   plan_request_items: { title: string; frequency_label: string } | null;
 }
 
@@ -151,8 +151,8 @@ export default function JobDetailPage() {
               <p className="text-sm font-medium text-gray-800">
                 {job.service_providers?.name ?? "Your provider"}
               </p>
-              {job.service_providers?.specialization && (
-                <p className="text-xs text-gray-500 mt-0.5">{job.service_providers.specialization}</p>
+              {job.service_providers?.provider_type && (
+                <p className="text-xs text-gray-500 mt-0.5">{job.service_providers.provider_type?.replace(/_/g, ' ')}</p>
               )}
             </div>
           </div>

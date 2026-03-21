@@ -40,11 +40,11 @@ export default async function Home() {
     .limit(1)
     .single();
 
-  if (planRequest?.status === "paid") {
+  if (planRequest?.status === "active" || planRequest?.status === "paused") {
     redirect("/plan-active");
   }
 
-  // For all other states (no plan / submitted / under_process / finalized),
+  // For all other states (no plan / submitted / captain_allocation_pending / payment_pending),
   // go to /services which renders the correct plan-status-aware view.
   redirect("/services");
 }

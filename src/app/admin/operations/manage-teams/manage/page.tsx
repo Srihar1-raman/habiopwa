@@ -18,7 +18,7 @@ interface Provider {
   id: string;
   name: string;
   phone: string;
-  specialization: string | null;
+  provider_type: string | null;
 }
 
 interface Assignment {
@@ -378,7 +378,7 @@ export default function ManageAssignmentsPage() {
                     <option value="">Select provider…</option>
                     {providers.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} {p.specialization ? `(${p.specialization})` : ""}
+                        {p.name} {p.provider_type ? `(${p.provider_type.replace(/_/g, " ")})` : ""}
                       </option>
                     ))}
                   </select>
@@ -414,8 +414,8 @@ export default function ManageAssignmentsPage() {
                             <div key={a.assignmentId} className="flex items-center justify-between px-4 py-2 text-sm">
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-700">{a.provider.name}</span>
-                                {a.provider.specialization && (
-                                  <span className="text-gray-400 text-xs">{a.provider.specialization}</span>
+                                {a.provider.provider_type && (
+                                  <span className="text-gray-400 text-xs">{a.provider.provider_type.replace(/_/g, " ")}</span>
                                 )}
                               </div>
                               <button

@@ -90,7 +90,7 @@ function getCategoryIcon(slug: string) {
 /**
  * Shown when user has an existing plan request.
  * Displays a read-only summary grouped by category.
- * When status is "finalized", a sticky "Proceed to Payment" CTA is shown.
+ * When status is "payment_pending", a sticky "Proceed to Payment" CTA is shown.
  */
 function PlanSummaryView({
   planRequest,
@@ -99,7 +99,7 @@ function PlanSummaryView({
   planRequest: PlanRequest;
   onPay: () => void;
 }) {
-  const isFinalized = planRequest.status === "finalized";
+  const isFinalized = planRequest.status === "payment_pending";
 
   const grouped = planRequest.plan_request_items.reduce(
     (acc, item) => {
@@ -213,7 +213,7 @@ function PlanSummaryView({
         ))}
       </div>
 
-      {/* Sticky "Proceed to Payment" — only when finalized */}
+      {/* Sticky "Proceed to Payment" — only when payment_pending */}
       {isFinalized && (
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] px-4 py-4 bg-white border-t border-gray-100 z-50">
           <Button
@@ -321,7 +321,7 @@ export default function ServicesHomePage() {
   // All states — show the service selection homepage
   const banner = BANNERS[activeBanner];
   const { Icon: BannerIcon } = banner;
-  const isFinalized = planRequest?.status === "finalized";
+  const isFinalized = planRequest?.status === "payment_pending";
   const isUnderReview = planRequest && !isFinalized;
 
   return (
@@ -345,7 +345,7 @@ export default function ServicesHomePage() {
         </div>
       </div>
 
-      {/* Plan status banner — shown when user has a pending/finalized plan */}
+      {/* Plan status banner — shown when user has a pending plan */}
       {isFinalized && (
         <div className="mx-4 mt-3 bg-green-50 border border-green-200 rounded-2xl p-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">

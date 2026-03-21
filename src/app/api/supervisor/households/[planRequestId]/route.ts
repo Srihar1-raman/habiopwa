@@ -20,7 +20,7 @@ export async function GET(
       plan_request_items(id, title, frequency_label, unit_type, unit_value, price_monthly,
         service_categories(slug, name), service_jobs(name)),
       job_allocations(id, scheduled_date, scheduled_start_time, scheduled_end_time, status,
-        service_providers(name, specialization)),
+        service_providers(name, provider_type)),
       customers(phone, name, customer_profiles(flat_no, building, society, sector, city, pincode, home_type, bhk))`
     )
     .eq("id", planRequestId)
@@ -36,7 +36,7 @@ export async function GET(
 
   // Flatten nested Supabase structure into the shape the UI expects
   type CustomerRow = { phone: string; name: string | null; customer_profiles: { flat_no: string | null; building: string | null; society: string | null; sector: string | null; city: string | null; pincode: string | null; home_type: string | null; bhk: number | null } | null };
-  type AllocationRow = { id: string; scheduled_date: string | null; scheduled_start_time: string | null; scheduled_end_time: string | null; status: string; service_providers: { name: string; specialization: string | null } | null };
+  type AllocationRow = { id: string; scheduled_date: string | null; scheduled_start_time: string | null; scheduled_end_time: string | null; status: string; service_providers: { name: string; provider_type: string | null } | null };
 
   const customer = data.customers as unknown as CustomerRow | null;
   const profile = customer?.customer_profiles ?? null;
@@ -44,7 +44,7 @@ export async function GET(
   const jobAllocations = ((data.job_allocations ?? []) as unknown as AllocationRow[]).map((alloc) => ({
     id: alloc.id,
     provider_name: alloc.service_providers?.name ?? null,
-    job_title: alloc.service_providers?.specialization ?? "Service",
+    job_title: alloc.service_providers?.provider_type ?? "Service",
     scheduled_date: alloc.scheduled_date,
     scheduled_start_time: alloc.scheduled_start_time,
     status: alloc.status,

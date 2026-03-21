@@ -16,7 +16,7 @@ export async function GET() {
   const { data: regularRequests, error } = await supabaseAdmin
     .from("plan_requests")
     .select(selectFields)
-    .in("status", ["submitted", "under_process"])
+    .in("status", ["submitted", "captain_allocation_pending", "captain_review_pending"])
     .eq("assigned_supervisor_id", staff.id)
     .order("created_at", { ascending: false });
 
@@ -60,7 +60,7 @@ export async function GET() {
         .from("plan_requests")
         .select(selectFields)
         .in("id", pendingAddonPlanIds)
-        .in("status", ["paid", "finalized"])
+        .in("status", ["active"])
         .eq("assigned_supervisor_id", staff.id)
         .order("created_at", { ascending: false });
 
