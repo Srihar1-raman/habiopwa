@@ -1,47 +1,90 @@
--- HABIO MVP Schema
--- Run this in Supabase SQL editor
+-- HABIO MVP Schema — clean rewrite
+-- Run on a fresh Supabase project before seed.sql
+-- DO NOT run on existing installations (not migration-safe)
 
--- =====================
+-- ============================================================================
 -- EXTENSIONS
--- =====================
-create extension if not exists pgcrypto;
+-- ============================================================================
 
--- =====================
--- ENUM TYPES (compat-safe for Supabase/Postgres)
--- =====================
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cart_status') THEN
-    CREATE TYPE cart_status AS ENUM ('active', 'submitted');
-  END IF;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'plan_request_status') THEN
-    CREATE TYPE plan_request_status AS ENUM ('submitted', 'under_process', 'finalized', 'paid', 'cancelled');
-  END IF;
-END $$;
+-- ============================================================================
+-- ENUM TYPES
+-- ============================================================================
 
--- Expand plan_request_status with full lifecycle values (PR3) — safe for existing installs
--- ALTER TYPE ADD VALUE IF NOT EXISTS is supported in Postgres 9.3+ (Supabase uses 14+)
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'cart_in_progress';
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'captain_allocation_pending';
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'captain_review_pending';
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'payment_pending';
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'active';
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'paused';
-ALTER TYPE plan_request_status ADD VALUE IF NOT EXISTS 'completed';
+-- Cart workflow
+CREATE TYPE cart_status AS ENUM ('active', 'submitted');
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
-    CREATE TYPE payment_status AS ENUM ('pending', 'succeeded', 'failed');
-  END IF;
-END $$;
+-- Plan request lifecycle: cart_in_progress → submitted → captain_allocation_pending → captain_review_pending → payment_pending → active → paused/completed/cancelled/closed
+CREATE TYPE plan_request_status AS ENUM (
+  'cart_in_progress',
+  'submitted',
+  'captain_allocation_pending',
+  'captain_review_pending',
+  'payment_pending',
+  'active',
+  'paused',
+  'completed',
+  'cancelled',
+  'closed'
+);
 
--- =====================
--- CATALOG
--- =====================
+CREATE TYPE payment_status AS ENUM ('pending', 'succeeded', 'failed');
 
-CREATE TABLE IF NOT EXISTS service_categories (
+-- Staff hierarchy: admin > ops_lead > manager > supervisor
+CREATE TYPE staff_role AS ENUM ('admin', 'ops_lead', 'manager', 'supervisor');
+
+CREATE TYPE staff_status AS ENUM ('active', 'inactive');
+
+-- Service provider types (technician subcategories for electrical, plumber, carpenter, RO, AC)
+CREATE TYPE provider_type AS ENUM (
+  'housekeeping',
+  'kitchen',
+  'car_care',
+  'garden_care',
+  'technician_electrical',
+  'technician_plumber',
+  'technician_carpenter',
+  'technician_ro',
+  'technician_ac'
+);
+
+CREATE TYPE provider_status AS ENUM ('available', 'on_leave', 'inactive');
+
+-- Job allocation lifecycle and delay tracking
+CREATE TYPE job_allocation_status AS ENUM (
+  'scheduled',
+  'in_progress',
+  'completed',
+  'completed_delayed',
+  'scheduled_delayed',
+  'in_progress_delayed',
+  'cancelled',
+  'cancelled_by_customer',
+  'service_on_pause',
+  'incomplete',
+  'status_not_marked'
+);
+
+CREATE TYPE pause_status AS ENUM ('pending', 'approved', 'rejected', 'active', 'completed');
+
+CREATE TYPE leave_status AS ENUM ('pending', 'approved', 'rejected', 'cancelled');
+
+CREATE TYPE on_demand_status AS ENUM ('pending', 'allocated', 'in_progress', 'completed', 'cancelled');
+
+CREATE TYPE issue_status AS ENUM ('open', 'in_progress', 'resolved', 'closed');
+
+CREATE TYPE issue_priority AS ENUM ('low', 'medium', 'high', 'urgent');
+
+CREATE TYPE commenter_type AS ENUM ('customer', 'supervisor', 'admin', 'provider');
+
+CREATE TYPE day_of_week AS ENUM ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday');
+
+-- ============================================================================
+-- CATALOG TABLES
+-- ============================================================================
+
+CREATE TABLE service_categories (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   slug        text UNIQUE NOT NULL,
   name        text NOT NULL,
@@ -49,14 +92,9 @@ CREATE TABLE IF NOT EXISTS service_categories (
   sort_order  int  NOT NULL DEFAULT 0
 );
 
--- service_jobs: full catalog with pricing parameters and formula metadata
--- formula_type:
---   standard       => base_price = input * base_rate_per_unit * instances_per_month
---   time_multiple  => base_price = input * time_multiple * base_rate_per_unit * instances_per_month
---   compound_head  => base_price = input * ((TM_head * rate_head * inst_head) + (TM_child * rate_child * inst_child))
---   compound_child => priced via compound_head, not shown as standalone
--- unit_type: 'min' | 'count_washrooms' | 'count_cars' | 'count_plants' | 'count_balconies' | 'count_visits'
-CREATE TABLE IF NOT EXISTS service_jobs (
+-- formula_type: standard | time_multiple | compound_head | compound_child
+-- unit_type: 'min' | 'count_washrooms' | 'count_cars' | 'count_plants' | 'count_balconies' | 'count_visits' | 'count_acs'
+CREATE TABLE service_jobs (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   category_id          uuid NOT NULL REFERENCES service_categories(id) ON DELETE CASCADE,
   slug                 text UNIQUE NOT NULL,
@@ -83,502 +121,18 @@ CREATE TABLE IF NOT EXISTS service_jobs (
   sort_order           int     NOT NULL DEFAULT 0
 );
 
--- job_pricing is kept for backward compatibility; new pricing comes from service_jobs formula fields
-CREATE TABLE IF NOT EXISTS job_pricing (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_id           uuid UNIQUE NOT NULL REFERENCES service_jobs(id) ON DELETE CASCADE,
-  currency         text NOT NULL DEFAULT 'INR',
-  mrp_monthly      numeric(10,2),
-  price_monthly    numeric(10,2) NOT NULL,
-  default_minutes  int NOT NULL DEFAULT 30,
-  min_minutes      int NOT NULL DEFAULT 15,
-  max_minutes      int NOT NULL DEFAULT 90,
-  step_minutes     int NOT NULL DEFAULT 15
-);
-
-CREATE TABLE IF NOT EXISTS job_expectations (
+CREATE TABLE job_expectations (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   job_id     uuid NOT NULL REFERENCES service_jobs(id) ON DELETE CASCADE,
   sort_order int  NOT NULL DEFAULT 0,
   text       text NOT NULL
 );
 
--- =====================
--- CUSTOMER
--- =====================
-
-CREATE TABLE IF NOT EXISTS customers (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  phone      text UNIQUE NOT NULL,
-  name       text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS customer_profiles (
-  customer_id      uuid PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
-  flat_no          text NOT NULL,
-  building         text,
-  society          text,
-  sector           text,
-  city             text,
-  pincode          text,
-  home_type        text,
-  bhk              int,
-  bathrooms        int,
-  balconies        int,
-  diet_pref        text,
-  people_count     int,
-  cook_window_morning  boolean NOT NULL DEFAULT false,
-  cook_window_evening  boolean NOT NULL DEFAULT false,
-  kitchen_notes    text
-);
-
-CREATE TABLE IF NOT EXISTS customer_sessions (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id   uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  session_token text UNIQUE NOT NULL,
-  expires_at    timestamptz NOT NULL,
-  created_at    timestamptz NOT NULL DEFAULT now()
-);
-
--- =====================
--- CART
--- =====================
-
-CREATE TABLE IF NOT EXISTS carts (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  status      cart_status NOT NULL DEFAULT 'active',
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS cart_items (
-  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  cart_id               uuid NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
-  category_id           uuid NOT NULL REFERENCES service_categories(id),
-  job_id                uuid REFERENCES service_jobs(id),
-  job_code              text,
-  custom_title          text,
-  frequency_label       text NOT NULL DEFAULT 'Daily',
-  -- unit snapshot (set at add-to-cart time, updated when user changes input)
-  unit_type             text NOT NULL DEFAULT 'min',
-  unit_value            int  NOT NULL DEFAULT 30,
-  minutes               int  NOT NULL DEFAULT 30,   -- kept for backward compat; equals unit_value when unit_type='min'
-  -- pricing snapshot fields (immutable once submitted)
-  base_rate_per_unit    numeric(10,4),
-  instances_per_month   int,
-  discount_pct          numeric(5,4),
-  time_multiple         numeric(6,2),
-  formula_type          text,
-  base_price_monthly    numeric(10,2),
-  unit_price_monthly    numeric(10,2) NOT NULL,
-  mrp_monthly           numeric(10,2),
-  expectations_snapshot jsonb,
-  sort_order            int  NOT NULL DEFAULT 0
-);
-
--- =====================
--- PLAN REQUESTS
--- =====================
-
-CREATE TABLE IF NOT EXISTS plan_requests (
-  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_code        text UNIQUE NOT NULL,
-  customer_id         uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  status              plan_request_status NOT NULL DEFAULT 'submitted',
-  total_price_monthly numeric(10,2) NOT NULL DEFAULT 0,
-  created_at          timestamptz NOT NULL DEFAULT now(),
-  updated_at          timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS plan_request_items (
-  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  plan_request_id       uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
-  category_id           uuid NOT NULL REFERENCES service_categories(id),
-  job_id                uuid REFERENCES service_jobs(id),
-  job_code              text,
-  title                 text NOT NULL,
-  frequency_label       text NOT NULL DEFAULT 'Daily',
-  unit_type             text NOT NULL DEFAULT 'min',
-  unit_value            int  NOT NULL DEFAULT 30,
-  minutes               int  NOT NULL DEFAULT 30,
-  -- full pricing snapshot at time of submission
-  base_rate_per_unit    numeric(10,4),
-  instances_per_month   int,
-  discount_pct          numeric(5,4),
-  time_multiple         numeric(6,2),
-  formula_type          text,
-  base_price_monthly    numeric(10,2),
-  price_monthly         numeric(10,2) NOT NULL,
-  mrp_monthly           numeric(10,2),
-  expectations_snapshot jsonb,
-  is_addon              boolean NOT NULL DEFAULT false,
-  updated_at            timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS plan_request_events (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  plan_request_id uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
-  event_type      text NOT NULL,
-  note            text,
-  created_at      timestamptz NOT NULL DEFAULT now()
-);
-
--- =====================
--- PAYMENTS (stub)
--- =====================
-
-CREATE TABLE IF NOT EXISTS payments (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  plan_request_id uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
-  amount          numeric(10,2) NOT NULL,
-  status          payment_status NOT NULL DEFAULT 'pending',
-  provider        text,
-  provider_ref    text,
-  created_at      timestamptz NOT NULL DEFAULT now()
-);
-
--- =====================
--- INDEXES
--- =====================
-
-CREATE INDEX IF NOT EXISTS idx_customer_sessions_token ON customer_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_customer_sessions_customer ON customer_sessions(customer_id);
-CREATE INDEX IF NOT EXISTS idx_carts_customer ON carts(customer_id);
-CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
-CREATE INDEX IF NOT EXISTS idx_plan_requests_customer ON plan_requests(customer_id);
-CREATE INDEX IF NOT EXISTS idx_plan_requests_status ON plan_requests(status);
-CREATE INDEX IF NOT EXISTS idx_plan_requests_code ON plan_requests(request_code);
-CREATE INDEX IF NOT EXISTS idx_plan_request_items_request ON plan_request_items(plan_request_id);
-CREATE INDEX IF NOT EXISTS idx_service_jobs_category ON service_jobs(category_id);
-
--- =====================
--- RLS: deny public, allow service role (server only)
--- =====================
-
-ALTER TABLE service_categories     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE service_jobs           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE job_pricing            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE job_expectations       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customer_profiles      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customer_sessions      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE carts                  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cart_items             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE plan_requests          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE plan_request_items     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE plan_request_events    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments               ENABLE ROW LEVEL SECURITY;
-
--- NOTE:
--- No RLS policies are created here on purpose.
--- With RLS enabled and no policies, anon/authenticated users are denied.
--- Your Next.js server should use the Supabase SERVICE_ROLE key to access data securely.
-
--- =====================
--- UPGRADE MIGRATION (existing installations)
--- These ALTER TABLE statements are safe to run multiple times (IF NOT EXISTS).
--- If you are doing a fresh install from this schema, the columns already exist above.
--- =====================
-
-ALTER TABLE service_categories ADD COLUMN IF NOT EXISTS code text;
-
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS code                text;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS class               text;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS service_type        text;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS primary_card        text;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS sub_card            text;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS unit_type           text NOT NULL DEFAULT 'min';
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS unit_interval       int  NOT NULL DEFAULT 15;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS min_unit            int  NOT NULL DEFAULT 15;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS max_unit            int  NOT NULL DEFAULT 120;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS default_unit        int  NOT NULL DEFAULT 30;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS time_multiple       numeric(6,2);
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS base_rate_per_unit  numeric(10,4) NOT NULL DEFAULT 0;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS instances_per_month int  NOT NULL DEFAULT 26;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS discount_pct        numeric(5,4) NOT NULL DEFAULT 0.2000;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS is_on_demand        boolean NOT NULL DEFAULT false;
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS formula_type        text NOT NULL DEFAULT 'standard';
-ALTER TABLE service_jobs ADD COLUMN IF NOT EXISTS compound_child_code text;
-
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS job_code             text;
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS unit_type            text NOT NULL DEFAULT 'min';
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS unit_value           int  NOT NULL DEFAULT 30;
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS base_rate_per_unit   numeric(10,4);
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS instances_per_month  int;
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS discount_pct         numeric(5,4);
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS time_multiple        numeric(6,2);
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS formula_type         text;
-ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS base_price_monthly   numeric(10,2);
-
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS job_code             text;
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS unit_type            text NOT NULL DEFAULT 'min';
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS unit_value           int  NOT NULL DEFAULT 30;
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS base_rate_per_unit   numeric(10,4);
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS instances_per_month  int;
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS discount_pct         numeric(5,4);
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS time_multiple        numeric(6,2);
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS formula_type         text;
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS base_price_monthly   numeric(10,2);
-ALTER TABLE plan_request_items ADD COLUMN IF NOT EXISTS is_addon             boolean NOT NULL DEFAULT false;
--- =====================
--- PLAN START DATE & CART PREFERRED DATE
--- Add plan_start_date to plan_requests and preferred_start_date to carts.
--- Safe to run multiple times (IF NOT EXISTS).
--- =====================
-
-ALTER TABLE plan_requests
-  ADD COLUMN IF NOT EXISTS plan_start_date DATE;
-
-ALTER TABLE carts
-  ADD COLUMN IF NOT EXISTS preferred_start_date DATE;
-
--- =====================
--- PLAN ACTIVE DATE TRACKING
--- =====================
-ALTER TABLE plan_requests
-  ADD COLUMN IF NOT EXISTS plan_active_start_date date;
-
-ALTER TABLE plan_requests
-  ADD COLUMN IF NOT EXISTS plan_active_end_date date;
-
-ALTER TABLE plan_requests
-  ADD COLUMN IF NOT EXISTS is_recurring boolean DEFAULT true;
-
--- =====================
--- SERVICE PROVIDERS
--- =====================
-
-CREATE TABLE IF NOT EXISTS service_providers (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  phone            text UNIQUE NOT NULL,
-  name             text NOT NULL,
-  specialization   text NOT NULL,
-  is_active        boolean DEFAULT true,
-  status           text DEFAULT 'available',
-  created_at       timestamptz DEFAULT now(),
-  updated_at       timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_service_providers_phone ON service_providers(phone);
-CREATE INDEX IF NOT EXISTS idx_service_providers_specialization ON service_providers(specialization);
-
--- =====================
--- PROVIDER SESSIONS
--- =====================
-
-CREATE TABLE IF NOT EXISTS provider_sessions (
-  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  service_provider_id  uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
-  session_token        text UNIQUE NOT NULL,
-  expires_at           timestamptz NOT NULL,
-  created_at           timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_provider_sessions_token ON provider_sessions(session_token);
-
-ALTER TABLE provider_sessions ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- JOB ALLOCATIONS
--- =====================
-
-CREATE TABLE IF NOT EXISTS job_allocations (
-  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  plan_request_id          uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
-  plan_request_item_id     uuid NOT NULL REFERENCES plan_request_items(id) ON DELETE CASCADE,
-  service_provider_id      uuid NOT NULL REFERENCES service_providers(id),
-  customer_id              uuid NOT NULL REFERENCES customers(id),
-  scheduled_date           date NOT NULL,
-  scheduled_start_time     time NOT NULL,
-  scheduled_end_time       time NOT NULL,
-  actual_start_time        time,
-  actual_end_time          time,
-  status                   text NOT NULL DEFAULT 'scheduled',
-  is_locked                boolean DEFAULT false,
-  cancellation_reason      text,
-  supervisor_notes         text,
-  created_at               timestamptz DEFAULT now(),
-  updated_at               timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_job_allocations_plan ON job_allocations(plan_request_id);
-CREATE INDEX IF NOT EXISTS idx_job_allocations_provider ON job_allocations(service_provider_id);
-CREATE INDEX IF NOT EXISTS idx_job_allocations_customer ON job_allocations(customer_id);
-CREATE INDEX IF NOT EXISTS idx_job_allocations_date ON job_allocations(scheduled_date);
-CREATE INDEX IF NOT EXISTS idx_job_allocations_status ON job_allocations(status);
-
-ALTER TABLE job_allocations ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- PAUSE REQUESTS
--- =====================
-
-CREATE TABLE IF NOT EXISTS pause_requests (
-  id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id                 uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  plan_request_id             uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
-  pause_type                  text NOT NULL,
-  pause_start_date            date NOT NULL,
-  pause_end_date              date,
-  pause_duration_unit         text,
-  pause_duration_value        int,
-  status                      text DEFAULT 'active',
-  supervisor_approval_status  text DEFAULT 'pending',
-  created_at                  timestamptz DEFAULT now(),
-  updated_at                  timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_pause_requests_customer ON pause_requests(customer_id);
-CREATE INDEX IF NOT EXISTS idx_pause_requests_plan ON pause_requests(plan_request_id);
-CREATE INDEX IF NOT EXISTS idx_pause_requests_status ON pause_requests(status);
-
-ALTER TABLE pause_requests ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- ON-DEMAND REQUESTS
--- =====================
-
-CREATE TABLE IF NOT EXISTS on_demand_requests (
-  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id           uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  plan_request_id       uuid NOT NULL REFERENCES plan_requests(id),
-  job_id                uuid NOT NULL REFERENCES service_jobs(id),
-  request_date          date NOT NULL,
-  request_time_preference text,
-  service_provider_id   uuid REFERENCES service_providers(id),
-  allocated_date        date,
-  allocated_start_time  time,
-  allocated_end_time    time,
-  status                text DEFAULT 'pending',
-  customer_notes        text,
-  created_at            timestamptz DEFAULT now(),
-  updated_at            timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_on_demand_requests_customer ON on_demand_requests(customer_id);
-CREATE INDEX IF NOT EXISTS idx_on_demand_requests_plan ON on_demand_requests(plan_request_id);
-CREATE INDEX IF NOT EXISTS idx_on_demand_requests_status ON on_demand_requests(status);
-
-ALTER TABLE on_demand_requests ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- TECH SERVICES ALLOWANCE
--- =====================
-
-CREATE TABLE IF NOT EXISTS tech_services_allowance (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  plan_request_id  uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
-  service_type     text NOT NULL,
-  allowed_count    int DEFAULT 2,
-  used_count       int DEFAULT 0,
-  current_month    int,
-  current_year     int,
-  created_at       timestamptz DEFAULT now(),
-  updated_at       timestamptz DEFAULT now(),
-  CONSTRAINT unique_plan_service UNIQUE (plan_request_id, service_type)
-);
-
-CREATE INDEX IF NOT EXISTS idx_tech_allowance_plan ON tech_services_allowance(plan_request_id);
-
-ALTER TABLE tech_services_allowance ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- ISSUE TICKETS
--- =====================
-
-CREATE TABLE IF NOT EXISTS issue_tickets (
-  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id         uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-  plan_request_id     uuid NOT NULL REFERENCES plan_requests(id),
-  job_allocation_id   uuid REFERENCES job_allocations(id),
-  title               text NOT NULL,
-  description         text,
-  status              text DEFAULT 'open',
-  priority            text DEFAULT 'medium',
-  supervisor_response text,
-  created_at          timestamptz DEFAULT now(),
-  updated_at          timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_issue_tickets_customer ON issue_tickets(customer_id);
-CREATE INDEX IF NOT EXISTS idx_issue_tickets_status ON issue_tickets(status);
-
-ALTER TABLE issue_tickets ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- ISSUE COMMENTS
--- =====================
-
-CREATE TABLE IF NOT EXISTS issue_comments (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  issue_ticket_id  uuid NOT NULL REFERENCES issue_tickets(id) ON DELETE CASCADE,
-  commented_by     text NOT NULL,
-  comment_text     text NOT NULL,
-  created_at       timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_issue_comments_ticket ON issue_comments(issue_ticket_id);
-
-ALTER TABLE issue_comments ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- PROVIDER LEAVE REQUESTS
--- =====================
-
-CREATE TABLE IF NOT EXISTS provider_leave_requests (
-  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  service_provider_id  uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
-  leave_start_date     date NOT NULL,
-  leave_end_date       date NOT NULL,
-  leave_type           text,
-  status               text DEFAULT 'pending',
-  created_at           timestamptz DEFAULT now(),
-  updated_at           timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_provider_leave_provider ON provider_leave_requests(service_provider_id);
-
-ALTER TABLE provider_leave_requests ENABLE ROW LEVEL SECURITY;
-
--- =====================
--- DAILY REPORTS
--- =====================
-
-CREATE TABLE IF NOT EXISTS daily_reports (
-  id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  report_date             date NOT NULL UNIQUE,
-  total_jobs_scheduled    int DEFAULT 0,
-  total_jobs_completed    int DEFAULT 0,
-  total_jobs_delayed      int DEFAULT 0,
-  total_jobs_cancelled    int DEFAULT 0,
-  breakage_count          int DEFAULT 0,
-  summary_notes           text,
-  created_at              timestamptz DEFAULT now()
-);
-
-ALTER TABLE daily_reports ENABLE ROW LEVEL SECURITY;
-
--- RLS for service_providers (read via service role only)
-ALTER TABLE service_providers ENABLE ROW LEVEL SECURITY;
-
-
--- =====================
--- STAFF AUTH SYSTEM (added PR1)
--- =====================
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'staff_role') THEN
-    CREATE TYPE staff_role AS ENUM ('admin', 'ops_lead', 'manager', 'supervisor');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'staff_status') THEN
-    CREATE TYPE staff_status AS ENUM ('active', 'inactive');
-  END IF;
-END $$;
-
-CREATE TABLE IF NOT EXISTS locations (
+-- ============================================================================
+-- LOCATIONS
+-- ============================================================================
+
+CREATE TABLE locations (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name        text NOT NULL,
   city        text,
@@ -588,14 +142,12 @@ CREATE TABLE IF NOT EXISTS locations (
   is_active   boolean NOT NULL DEFAULT true,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
-ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
 
--- Add missing columns to locations (safe for existing installs)
-ALTER TABLE locations ADD COLUMN IF NOT EXISTS state text;
-ALTER TABLE locations ADD COLUMN IF NOT EXISTS pincode text;
-ALTER TABLE locations ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
+-- ============================================================================
+-- STAFF TABLES
+-- ============================================================================
 
-CREATE TABLE IF NOT EXISTS staff_accounts (
+CREATE TABLE staff_accounts (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   phone             text UNIQUE NOT NULL,
   name              text NOT NULL,
@@ -611,55 +163,439 @@ CREATE TABLE IF NOT EXISTS staff_accounts (
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_staff_accounts_phone ON staff_accounts(phone);
-CREATE INDEX IF NOT EXISTS idx_staff_accounts_email ON staff_accounts(email);
-CREATE INDEX IF NOT EXISTS idx_staff_accounts_role ON staff_accounts(role);
-CREATE INDEX IF NOT EXISTS idx_staff_accounts_reports_to ON staff_accounts(reports_to);
-ALTER TABLE staff_accounts ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS staff_sessions (
+CREATE TABLE staff_sessions (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   staff_id        uuid NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
   session_token   text UNIQUE NOT NULL,
   expires_at      timestamptz NOT NULL,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_staff_sessions_token ON staff_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_staff_sessions_staff ON staff_sessions(staff_id);
-ALTER TABLE staff_sessions ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS provider_team_assignments (
+-- ============================================================================
+-- CUSTOMER TABLES
+-- ============================================================================
+
+CREATE TABLE customers (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone      text UNIQUE NOT NULL,
+  name       text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE customer_profiles (
+  customer_id          uuid PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+  flat_no              text NOT NULL,
+  building             text,
+  society              text,
+  sector               text,
+  city                 text,
+  pincode              text,
+  home_type            text,
+  bhk                  int,
+  bathrooms            int,
+  balconies            int,
+  cars                 int NOT NULL DEFAULT 0,
+  plants               int NOT NULL DEFAULT 0,
+  diet_pref            text,
+  people_count         int,
+  cook_window_morning  boolean NOT NULL DEFAULT false,
+  cook_window_evening  boolean NOT NULL DEFAULT false,
+  kitchen_notes        text
+);
+
+CREATE TABLE customer_sessions (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id   uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  session_token text UNIQUE NOT NULL,
+  expires_at    timestamptz NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- CART TABLES
+-- ============================================================================
+
+CREATE TABLE carts (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id          uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  status               cart_status NOT NULL DEFAULT 'active',
+  preferred_start_date date,
+  created_at           timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE cart_items (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cart_id               uuid NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+  category_id           uuid NOT NULL REFERENCES service_categories(id),
+  job_id                uuid REFERENCES service_jobs(id),
+  job_code              text,
+  custom_title          text,
+  frequency_label       text NOT NULL DEFAULT 'Daily',
+  unit_type             text NOT NULL DEFAULT 'min',
+  unit_value            int  NOT NULL DEFAULT 30,
+  minutes               int  NOT NULL DEFAULT 30,
+  base_rate_per_unit    numeric(10,4),
+  instances_per_month   int,
+  discount_pct          numeric(5,4),
+  time_multiple         numeric(6,2),
+  formula_type          text,
+  base_price_monthly    numeric(10,2),
+  unit_price_monthly    numeric(10,2) NOT NULL,
+  mrp_monthly           numeric(10,2),
+  expectations_snapshot jsonb,
+  sort_order            int  NOT NULL DEFAULT 0
+);
+
+-- ============================================================================
+-- PLAN REQUESTS
+-- ============================================================================
+
+CREATE TABLE plan_requests (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_code          text UNIQUE NOT NULL,
+  customer_id           uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  status                plan_request_status NOT NULL DEFAULT 'cart_in_progress',
+  total_price_monthly   numeric(10,2) NOT NULL DEFAULT 0,
+  plan_start_date       date,
+  plan_active_start_date date,
+  plan_active_end_date  date,
+  is_recurring          boolean DEFAULT true,
+  assigned_supervisor_id uuid REFERENCES staff_accounts(id),
+  admin_remarks         text,
+  closed_at             timestamptz,
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE plan_request_items (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_request_id       uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
+  category_id           uuid NOT NULL REFERENCES service_categories(id),
+  job_id                uuid REFERENCES service_jobs(id),
+  job_code              text,
+  title                 text NOT NULL,
+  frequency_label       text NOT NULL DEFAULT 'Daily',
+  unit_type             text NOT NULL DEFAULT 'min',
+  unit_value            int  NOT NULL DEFAULT 30,
+  minutes               int  NOT NULL DEFAULT 30,
+  base_rate_per_unit    numeric(10,4),
+  instances_per_month   int,
+  discount_pct          numeric(5,4),
+  time_multiple         numeric(6,2),
+  formula_type          text,
+  base_price_monthly    numeric(10,2),
+  price_monthly         numeric(10,2) NOT NULL,
+  mrp_monthly           numeric(10,2),
+  expectations_snapshot jsonb,
+  is_addon              boolean NOT NULL DEFAULT false,
+  updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+-- plan_request_events.event_type is free text (audit log); expected values match plan_request_status names
+CREATE TABLE plan_request_events (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_request_id uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
+  event_type      text NOT NULL,
+  note            text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- PAYMENTS
+-- ============================================================================
+
+CREATE TABLE payments (
+  id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_request_id         uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
+  amount                  numeric(10,2) NOT NULL,
+  status                  payment_status NOT NULL DEFAULT 'pending',
+  provider                text,
+  provider_ref            text,
+  payment_link            text,
+  payment_link_expires_at timestamptz,
+  paid_at                 timestamptz,
+  created_at              timestamptz NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- SERVICE PROVIDERS
+-- ============================================================================
+
+CREATE TABLE service_providers (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone             text UNIQUE NOT NULL,
+  name              text NOT NULL,
+  provider_type     provider_type NOT NULL,
+  status            provider_status NOT NULL DEFAULT 'available',
+  aadhaar           text,
+  address           text,
+  permanent_address text,
+  location_id       uuid REFERENCES locations(id),
+  created_at        timestamptz DEFAULT now(),
+  updated_at        timestamptz DEFAULT now()
+);
+
+-- Provider weekly offs (effective date range for flexibility)
+CREATE TABLE provider_week_offs (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_provider_id uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
+  day_of_week         day_of_week NOT NULL,
+  effective_from      date NOT NULL,
+  effective_to        date,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT unique_provider_weekoff UNIQUE (service_provider_id, day_of_week, effective_from)
+);
+
+CREATE TABLE provider_sessions (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_provider_id  uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
+  session_token        text UNIQUE NOT NULL,
+  expires_at           timestamptz NOT NULL,
+  created_at           timestamptz DEFAULT now()
+);
+
+CREATE TABLE provider_team_assignments (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   service_provider_id   uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
   supervisor_id         uuid NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
   assigned_at           timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT unique_provider_supervisor UNIQUE (service_provider_id, supervisor_id)
 );
-CREATE INDEX IF NOT EXISTS idx_pta_provider ON provider_team_assignments(service_provider_id);
-CREATE INDEX IF NOT EXISTS idx_pta_supervisor ON provider_team_assignments(supervisor_id);
+
+-- ============================================================================
+-- JOB ALLOCATIONS
+-- ============================================================================
+
+CREATE TABLE job_allocations (
+  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_request_id          uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
+  plan_request_item_id     uuid NOT NULL REFERENCES plan_request_items(id) ON DELETE CASCADE,
+  service_provider_id      uuid NOT NULL REFERENCES service_providers(id),
+  customer_id              uuid NOT NULL REFERENCES customers(id),
+  supervisor_id            uuid REFERENCES staff_accounts(id),
+  scheduled_date           date NOT NULL,
+  scheduled_start_time     time NOT NULL,
+  scheduled_end_time       time NOT NULL,
+  actual_start_time        timestamptz,
+  actual_end_time          timestamptz,
+  status                   job_allocation_status NOT NULL DEFAULT 'scheduled',
+  is_locked                boolean DEFAULT false,
+  cancellation_reason      text,
+  supervisor_notes         text,
+  created_at               timestamptz DEFAULT now(),
+  updated_at               timestamptz DEFAULT now()
+);
+
+-- ============================================================================
+-- PAUSE REQUESTS
+-- ============================================================================
+
+CREATE TABLE pause_requests (
+  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id              uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  plan_request_id          uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
+  pause_type               text NOT NULL,
+  pause_start_date         date NOT NULL,
+  pause_end_date           date,
+  pause_duration_unit      text,
+  pause_duration_value     int,
+  status                   pause_status NOT NULL DEFAULT 'pending',
+  created_at               timestamptz DEFAULT now(),
+  updated_at               timestamptz DEFAULT now()
+);
+
+-- ============================================================================
+-- PROVIDER LEAVE REQUESTS
+-- ============================================================================
+
+CREATE TABLE provider_leave_requests (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_provider_id  uuid NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
+  leave_start_date     date NOT NULL,
+  leave_end_date       date NOT NULL,
+  leave_type           text,
+  status               leave_status NOT NULL DEFAULT 'pending',
+  created_at           timestamptz DEFAULT now(),
+  updated_at           timestamptz DEFAULT now()
+);
+
+-- ============================================================================
+-- ON-DEMAND REQUESTS
+-- ============================================================================
+
+CREATE TABLE on_demand_requests (
+  id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id             uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  plan_request_id         uuid REFERENCES plan_requests(id),
+  job_id                  uuid NOT NULL REFERENCES service_jobs(id),
+  request_date            date NOT NULL,
+  request_time_preference text,
+  service_provider_id     uuid REFERENCES service_providers(id),
+  allocated_date          date,
+  allocated_start_time    time,
+  allocated_end_time      time,
+  status                  on_demand_status NOT NULL DEFAULT 'pending',
+  customer_notes          text,
+  created_at              timestamptz DEFAULT now(),
+  updated_at              timestamptz DEFAULT now()
+);
+
+-- ============================================================================
+-- TECH SERVICES ALLOWANCE (simplified: month_year instead of current_month/current_year)
+-- ============================================================================
+
+CREATE TABLE tech_services_allowance (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_request_id  uuid NOT NULL REFERENCES plan_requests(id) ON DELETE CASCADE,
+  service_type     text NOT NULL,
+  month_year       text NOT NULL,
+  allowed_count    int DEFAULT 2,
+  used_count       int DEFAULT 0,
+  created_at       timestamptz DEFAULT now(),
+  updated_at       timestamptz DEFAULT now(),
+  CONSTRAINT unique_plan_service_month UNIQUE (plan_request_id, service_type, month_year)
+);
+
+-- ============================================================================
+-- ISSUE TICKETS
+-- ============================================================================
+
+CREATE TABLE issue_tickets (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id         uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  plan_request_id     uuid NOT NULL REFERENCES plan_requests(id),
+  job_allocation_id   uuid REFERENCES job_allocations(id),
+  title               text NOT NULL,
+  description         text,
+  status              issue_status NOT NULL DEFAULT 'open',
+  priority            issue_priority NOT NULL DEFAULT 'medium',
+  supervisor_response text,
+  created_at          timestamptz DEFAULT now(),
+  updated_at          timestamptz DEFAULT now()
+);
+
+CREATE TABLE issue_comments (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  issue_ticket_id  uuid NOT NULL REFERENCES issue_tickets(id) ON DELETE CASCADE,
+  commenter_id     uuid NOT NULL,
+  commenter_type   commenter_type NOT NULL,
+  comment_text     text NOT NULL,
+  created_at       timestamptz DEFAULT now()
+);
+
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
+
+-- Customer sessions
+CREATE INDEX idx_customer_sessions_token ON customer_sessions(session_token);
+CREATE INDEX idx_customer_sessions_customer ON customer_sessions(customer_id);
+
+-- Carts
+CREATE INDEX idx_carts_customer ON carts(customer_id);
+
+-- Cart items
+CREATE INDEX idx_cart_items_cart ON cart_items(cart_id);
+
+-- Plan requests
+CREATE INDEX idx_plan_requests_customer ON plan_requests(customer_id);
+CREATE INDEX idx_plan_requests_status ON plan_requests(status);
+CREATE INDEX idx_plan_requests_code ON plan_requests(request_code);
+CREATE INDEX idx_plan_requests_supervisor ON plan_requests(assigned_supervisor_id);
+
+-- Plan request items
+CREATE INDEX idx_plan_request_items_plan ON plan_request_items(plan_request_id);
+
+-- Service jobs
+CREATE INDEX idx_service_jobs_category ON service_jobs(category_id);
+
+-- Service providers
+CREATE INDEX idx_service_providers_phone ON service_providers(phone);
+CREATE INDEX idx_service_providers_type ON service_providers(provider_type);
+
+-- Provider sessions
+CREATE INDEX idx_provider_sessions_token ON provider_sessions(session_token);
+
+-- Job allocations
+CREATE INDEX idx_job_allocations_plan ON job_allocations(plan_request_id);
+CREATE INDEX idx_job_allocations_provider ON job_allocations(service_provider_id);
+CREATE INDEX idx_job_allocations_customer ON job_allocations(customer_id);
+CREATE INDEX idx_job_allocations_date ON job_allocations(scheduled_date);
+CREATE INDEX idx_job_allocations_status ON job_allocations(status);
+CREATE INDEX idx_job_allocations_supervisor ON job_allocations(supervisor_id);
+
+-- Pause requests
+CREATE INDEX idx_pause_requests_customer ON pause_requests(customer_id);
+CREATE INDEX idx_pause_requests_plan ON pause_requests(plan_request_id);
+CREATE INDEX idx_pause_requests_status ON pause_requests(status);
+
+-- On-demand requests
+CREATE INDEX idx_on_demand_requests_customer ON on_demand_requests(customer_id);
+CREATE INDEX idx_on_demand_requests_plan ON on_demand_requests(plan_request_id);
+CREATE INDEX idx_on_demand_requests_status ON on_demand_requests(status);
+
+-- Tech services allowance
+CREATE INDEX idx_tech_services_allowance_plan ON tech_services_allowance(plan_request_id);
+
+-- Issue tickets
+CREATE INDEX idx_issue_tickets_customer ON issue_tickets(customer_id);
+CREATE INDEX idx_issue_tickets_status ON issue_tickets(status);
+
+-- Issue comments
+CREATE INDEX idx_issue_comments_ticket ON issue_comments(issue_ticket_id);
+
+-- Provider leave requests
+CREATE INDEX idx_provider_leave_requests_provider ON provider_leave_requests(service_provider_id);
+
+-- Provider team assignments
+CREATE INDEX idx_provider_team_assignments_provider ON provider_team_assignments(service_provider_id);
+CREATE INDEX idx_provider_team_assignments_supervisor ON provider_team_assignments(supervisor_id);
+
+-- Provider week offs
+CREATE INDEX idx_provider_week_offs_provider ON provider_week_offs(service_provider_id);
+
+-- Staff accounts
+CREATE INDEX idx_staff_accounts_phone ON staff_accounts(phone);
+CREATE INDEX idx_staff_accounts_email ON staff_accounts(email);
+CREATE INDEX idx_staff_accounts_role ON staff_accounts(role);
+CREATE INDEX idx_staff_accounts_reports_to ON staff_accounts(reports_to);
+
+-- Staff sessions
+CREATE INDEX idx_staff_sessions_token ON staff_sessions(session_token);
+CREATE INDEX idx_staff_sessions_staff ON staff_sessions(staff_id);
+
+-- Locations
+CREATE INDEX idx_locations_is_active ON locations(is_active);
+
+-- ============================================================================
+-- ROW LEVEL SECURITY
+-- ============================================================================
+
+-- Enable RLS on all tables (no policies - service role key is used server-side)
+ALTER TABLE service_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_expectations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staff_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staff_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE carts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plan_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plan_request_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plan_request_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE service_providers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_week_offs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE provider_team_assignments ENABLE ROW LEVEL SECURITY;
-
--- Add supervisor assignment to plan_requests
-ALTER TABLE plan_requests ADD COLUMN IF NOT EXISTS assigned_supervisor_id uuid REFERENCES staff_accounts(id);
-CREATE INDEX IF NOT EXISTS idx_plan_requests_supervisor ON plan_requests(assigned_supervisor_id);
-
--- Add supervisor tracking to job_allocations
-ALTER TABLE job_allocations ADD COLUMN IF NOT EXISTS supervisor_id uuid REFERENCES staff_accounts(id);
-CREATE INDEX IF NOT EXISTS idx_job_allocations_supervisor ON job_allocations(supervisor_id);
-
--- Add missing fields to service_providers
-ALTER TABLE service_providers ADD COLUMN IF NOT EXISTS aadhaar text;
-ALTER TABLE service_providers ADD COLUMN IF NOT EXISTS address text;
-ALTER TABLE service_providers ADD COLUMN IF NOT EXISTS permanent_address text;
-
--- =====================
--- PR2/PR3 CONTEXT NOTES:
--- The admin portal (PR2) will use staff_accounts + staff_sessions for auth.
--- API routes under /api/admin/* should use requireRole(['admin','ops_lead','manager']).
--- The hierarchy is: admin → ops_lead → manager → supervisor (via reports_to column).
--- provider_team_assignments maps providers to supervisors (many-to-many).
--- plan_requests.assigned_supervisor_id tracks which supervisor owns a plan.
--- To get all data visible to a manager: find their supervisors via reports_to,
---   then find those supervisors' providers via provider_team_assignments.
--- Locations table is primarily for supervisor cluster assignment.
--- =====================
+ALTER TABLE job_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pause_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE provider_leave_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE on_demand_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tech_services_allowance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE issue_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE issue_comments ENABLE ROW LEVEL SECURITY;

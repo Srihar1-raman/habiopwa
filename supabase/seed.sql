@@ -1,16 +1,10 @@
 -- ============================================================
--- HABIO Catalog Seed — sourced 1:1 from masterdata.xlsx
--- Run AFTER schema.sql in the Supabase SQL editor.
---
--- WARNING: This script clears ALL catalog, plan/cart data
--- AND seed user data before re-inserting.
--- Do NOT run on a production database with live data.
---
--- Deletion order respects FK constraints (leaf tables first).
+-- HABIO Seed Data — clean rewrite (single coherent story)
+-- Run AFTER schema.sql on a fresh Supabase project.
+-- Today's date context: 2026-03-21 (Saturday)
 -- ============================================================
 
-
--- ── 1. Clear old catalog and dependent transactional data ────
+-- ── 1. Nuke order (leaf tables first, respect FK constraints) ─────────────
 
 DELETE FROM issue_comments;
 DELETE FROM issue_tickets;
@@ -18,6 +12,7 @@ DELETE FROM on_demand_requests;
 DELETE FROM pause_requests;
 DELETE FROM job_allocations;
 DELETE FROM provider_leave_requests;
+DELETE FROM provider_week_offs;
 DELETE FROM tech_services_allowance;
 DELETE FROM payments;
 DELETE FROM plan_request_events;
@@ -29,23 +24,17 @@ DELETE FROM customer_sessions;
 DELETE FROM customer_profiles;
 DELETE FROM customers;
 DELETE FROM provider_sessions;
+DELETE FROM provider_team_assignments;
 DELETE FROM service_providers;
-DELETE FROM job_pricing;
 DELETE FROM job_expectations;
 DELETE FROM service_jobs;
 DELETE FROM service_categories;
--- Staff auth tables (PR1)
-DELETE FROM provider_team_assignments;
 DELETE FROM staff_sessions;
 DELETE FROM staff_accounts;
 DELETE FROM locations;
 
 
--- ── 2. Service Categories ──────────────────────────────────────
---
--- Stable fixed UUIDs (00…01–05) so category_id FKs never drift.
--- Order matches masterdata.xlsx service-category column.
--- ──────────────────────────────────────────────────────────────
+-- ── 2. Service Categories ──────────────────────────────────────────────────
 
 INSERT INTO service_categories (id, slug, name, code, sort_order) VALUES
   ('00000000-0000-0000-0000-000000000001', 'housekeeping',        'Housekeeping',        'HKP', 1),
@@ -54,44 +43,6 @@ INSERT INTO service_categories (id, slug, name, code, sort_order) VALUES
   ('00000000-0000-0000-0000-000000000004', 'garden-care',         'Garden Care',         'GCR', 4),
   ('00000000-0000-0000-0000-000000000005', 'technician-services', 'Technician Services', 'HMT', 5);
 
-
--- ── 3. Service Jobs ────────────────────────────────────────────
---
--- Column mapping from masterdata.xlsx → service_jobs:
---   col 1  Service Category            → category_id (via UUID above)
---   col 2  Class                       → class
---   col 3  Service Type                → service_type
---   col 4  Frequency                   → frequency_label
---   col 5  Primary Job Card ID         → (used to derive primary_card grouping)
---   col 6  Primary Job Card Name       → primary_card  (UI group header)
---   col 7  Sub Job Card ID             → code  (unique internal code; also drives slug)
---   col 8  Sub Job Card Name           → name  (shown to user); for compound_head rows
---                                         the Primary Job Card Name is used as the display name
---                                         because the user sees the full compound service, not the sub-task
---   col 9  Unit                        → unit_type  ('min' | 'count_washrooms' | 'count_cars' |
---                                                    'count_plants' | 'count_visits' | 'count_acs')
---   col 10 Unit Interval               → unit_interval  (step size in the UI stepper)
---   col 11 Min Unit                    → min_unit
---   col 12 Unit Time Multiple (min)    → time_multiple  (NULL for 'min' unit_type rows; for those
---                                         rows the interval acts as the step and is stored in unit_interval)
---   col 13 Base Rate per minute (₹)    → base_rate_per_unit
---   col 14 Job Instances per month     → instances_per_month  (1 for on-demand / per-use jobs)
---   col 15 Discount                    → discount_pct  (0.30 = 30%)
---
--- Formula types:
---   'standard'       → base = input × rate × instances
---                      used for all 'min' unit_type jobs
---   'time_multiple'  → base = input × TM × rate × instances
---                      used for count-based unit_type jobs
---   'compound_head'  → base = input × ((TM_head×rate_head×inst_head) + (TM_child×rate_child×inst_child))
---                      compound_child_code points to the paired compound_child row
---   'compound_child' → priced via compound_head; never shown as standalone in UI
---
--- UUID scheme:
---   11…  Housekeeping (HKP)
---   22…  Kitchen Services (KCH)
---   33…  Car Care (CCR)
---   44…  Garden Care (GCR)
 --   55…  Technician Services (HMT / SMT)
 -- ──────────────────────────────────────────────────────────────
 
@@ -532,7 +483,6 @@ INSERT INTO service_jobs (
   true, 5
 );
 
-
 -- ── 4. Job Expectations ────────────────────────────────────────
 -- Three bullet points per job (sourced from job name and service description).
 -- compound_child rows (CCR-CR-D-1B, GCR-CR-D-1B) have no standalone expectations
@@ -661,1256 +611,1724 @@ INSERT INTO job_expectations (job_id, sort_order, text) VALUES
 ('55000000-0000-0000-0000-000000000005', 2, 'Refrigerant check and leak inspection'),
 ('55000000-0000-0000-0000-000000000005', 3, 'Performance test and maintenance recommendations');
 
--- =====================================================================
--- SERVICE PROVIDER SEED DATA
--- Run AFTER schema.sql (new tables must exist).
--- Uses stable UUIDs so this section is safe to re-run (upsert pattern).
--- =====================================================================
-
--- Provider UUID scheme: a0000000-0000-0000-0000-0000000000NN (NN = provider number)
--- All characters are valid hex digits (0-9, a-f).
-INSERT INTO service_providers (id, phone, name, specialization, is_active, status, aadhaar, address, permanent_address) VALUES
--- specialization codes match masterdata classes:
---   HKP1=Housekeeping General, HKP2=Housekeeping Washroom, HKP3=Housekeeping Ironing
---   KCH=Kitchen/Cook, CCR=Car Care, GCR=Garden Care
---   HMT=Technician Home Maintenance, SMT=Technician Specialist Maintenance
-  ('a0000000-0000-0000-0000-000000000001', '+919900000001', 'Ravi Kumar',    'HKP1', true, 'available', '1234-5678-0001', 'House 12, Sector 10, Gurugram', 'Village Ravi, UP'),
-  ('a0000000-0000-0000-0000-000000000002', '+919900000002', 'Sunita Devi',   'KCH',  true, 'available', '1234-5678-0002', 'Flat 3B, Sector 50, Gurugram', 'Village Sunita, Bihar'),
-  ('a0000000-0000-0000-0000-000000000003', '+919900000003', 'Arjun Sharma',  'HMT',  true, 'available', '1234-5678-0003', 'Room 5, Sector 57, Gurugram', 'Village Arjun, Rajasthan'),
-  ('a0000000-0000-0000-0000-000000000004', '+919900000004', 'Mohan Singh',   'SMT',  true, 'available', '1234-5678-0004', 'Room 8, Sector 58, Gurugram', 'Village Mohan, MP'),
-  ('a0000000-0000-0000-0000-000000000005', '+919900000005', 'Priya Nair',    'HKP1', true, 'available', '1234-5678-0005', 'Flat 6A, Sector 70, Gurugram', 'Village Priya, Kerala'),
-  ('a0000000-0000-0000-0000-000000000006', '+919900000006', 'Ramesh Gupta',  'HKP2', true, 'available', '1234-5678-0006', 'House 22, Sector 71, Gurugram', 'Village Ramesh, UP'),
-  ('a0000000-0000-0000-0000-000000000007', '+919900000007', 'Deepa Kumari',  'CCR',  true, 'available', '1234-5678-0007', 'Flat 9C, Sector 55, Gurugram', 'Village Deepa, Bihar'),
-  ('a0000000-0000-0000-0000-000000000008', '+919900000008', 'Ajay Yadav',    'HKP3', true, 'available', '1234-5678-0008', 'Room 11, Sector 52, Gurugram', 'Village Ajay, Haryana'),
-  ('a0000000-0000-0000-0000-000000000009', '+919900000009', 'Rekha Bai',     'KCH',  true, 'available', '1234-5678-0009', 'House 3, Sector 75, Gurugram', 'Village Rekha, MP'),
-  ('a0000000-0000-0000-0000-000000000010', '+919900000010', 'Satish Verma',  'GCR',  true, 'available', '1234-5678-0010', 'Room 7, Sector 78, Gurugram', 'Village Satish, Rajasthan')
-ON CONFLICT (id) DO UPDATE SET
-  name              = EXCLUDED.name,
-  specialization    = EXCLUDED.specialization,
-  is_active         = EXCLUDED.is_active,
-  status            = EXCLUDED.status,
-  aadhaar           = EXCLUDED.aadhaar,
-  address           = EXCLUDED.address,
-  permanent_address = EXCLUDED.permanent_address;
 
 
--- =====================================================================
--- SEED USER DATA — 2 active customers with full ecosystem flow
---
--- Customer 1: Ananya Sharma  (+919800000001)
---   • Plan: Housekeeping 45 min/day + Daily Cooking Morning 60 min/day
---   • Started: 2026-02-26  |  Status: paid (active ~3 weeks)
---   • Providers: Ravi Kumar (HKP), Sunita Devi (Cooking)
---
--- Customer 2: Vikram Patel  (+919800000002)
---   • Plan: Housekeeping 30 min/day + Basic Car Care 1 car/day
---   • Started: 2026-03-02  |  Status: paid (active ~2.5 weeks)
---   • Providers: Priya Nair (HKP), Deepa Kumari (Car Care)
---
--- UUID key:
---   Customers:         c1…001 / c2…002
---   Plans:             b1…001 / b2…002
---   Plan items:        e1…00N (C1 items), e2…00N (C2 items)
---   Job allocations:   fa…  | service 0001=C1-HKP 0002=C1-KCH 0003=C2-HKP 0004=C2-CCR
---                            | date 000001-000015 = Mar 11-25
--- =====================================================================
+-- ── 3. Locations ──────────────────────────────────────────────────────────
 
--- ── Customers ────────────────────────────────────────────────────────
-
-INSERT INTO customers (id, phone, name) VALUES
-  ('c1000000-0000-0000-0000-000000000001', '+919800000001', 'Ananya Sharma'),
-  ('c2000000-0000-0000-0000-000000000002', '+919800000002', 'Vikram Patel');
-
-INSERT INTO customer_profiles (
-  customer_id, flat_no, building, society, sector, city, pincode,
-  home_type, bhk, bathrooms, balconies, diet_pref, people_count,
-  cook_window_morning, cook_window_evening
-) VALUES
-  ('c1000000-0000-0000-0000-000000000001',
-   '304', 'Tower B', 'Green Valley Residency', 'Sector 45', 'Gurugram', '122003',
-   'apartment', 2, 2, 1, 'veg', 3, true, false),
-  ('c2000000-0000-0000-0000-000000000002',
-   '102', 'Sunrise Block', 'Palm Grove Society', 'Sector 12', 'Noida', '201301',
-   'apartment', 3, 3, 2, 'non-veg', 4, false, false);
+INSERT INTO locations (id, name, city, sector, state, pincode, is_active) VALUES
+  ('e0000000-0000-0000-0000-000000000001', 'Sector 45, Gurugram', 'Gurugram', '45', 'Haryana', '122003', true),
+  ('e0000000-0000-0000-0000-000000000002', 'Sector 50, Gurugram', 'Gurugram', '50', 'Haryana', '122018', true),
+  ('e0000000-0000-0000-0000-000000000003', 'Sector 57, Gurugram', 'Gurugram', '57', 'Haryana', '122011', true);
 
 
--- ── Plan Requests (status = paid, active) ────────────────────────────
--- Pricing:
---   C1 HKP 45 min:  45×3.3×30 = 4455 base  → 3118.50 discounted (30%)
---   C1 KCH 60 min:  60×4×30   = 7200 base  → 5040.00 discounted (30%)
---   C2 HKP 30 min:  30×3.3×30 = 2970 base  → 2079.00 discounted (30%)
---   C2 CCR 1 car:   1×((15×3.3×30)+(15×3.3×4)) = 1683 base → 1178.10 discounted (30%)
+-- ── 4. Staff Accounts ─────────────────────────────────────────────────────
+-- All passwords: bcrypt hash of "admin123"
+-- $2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6
 
-INSERT INTO plan_requests (
-  id, request_code, customer_id, status,
-  total_price_monthly, plan_start_date,
-  plan_active_start_date, is_recurring,
-  created_at, updated_at
-) VALUES
-  ('b1000000-0000-0000-0000-000000000001',
-   'HABIO-C1-0001',
-   'c1000000-0000-0000-0000-000000000001',
-   'paid',
-   8158.50,
-   '2026-02-25',
-   '2026-02-26',
-   true,
-   '2026-02-25 09:00:00+05:30',
-   '2026-02-26 10:30:00+05:30'),
-  ('b2000000-0000-0000-0000-000000000002',
-   'HABIO-C2-0002',
-   'c2000000-0000-0000-0000-000000000002',
-   'paid',
-   3257.10,
-   '2026-03-01',
-   '2026-03-02',
-   true,
-   '2026-03-01 11:00:00+05:30',
-   '2026-03-02 09:45:00+05:30');
-
-
--- ── Plan Request Items ────────────────────────────────────────────────
-
-INSERT INTO plan_request_items (
-  id, plan_request_id, category_id, job_id, job_code, title,
-  frequency_label, unit_type, unit_value, minutes,
-  base_rate_per_unit, instances_per_month, discount_pct,
-  time_multiple, formula_type, base_price_monthly,
-  price_monthly, mrp_monthly, updated_at
-) VALUES
-  -- C1: Housekeeping — Dusting, Brooming, Mopping (45 min daily)
-  ('e1000000-0000-0000-0001-000000000001',
-   'b1000000-0000-0000-0000-000000000001',
-   '00000000-0000-0000-0000-000000000001',
-   '11000000-0000-0000-0000-000000000001',
-   'HKP1-CR-D-1A',
-   'Dusting, Brooming, Mopping',
-   'Daily', 'min', 45, 45,
-   3.3000, 30, 0.3000,
-   NULL, 'standard', 4455.00,
-   3118.50, 4455.00,
-   '2026-02-26 10:30:00+05:30'),
-  -- C1: Kitchen — Daily Cooking Morning (60 min daily)
-  ('e1000000-0000-0000-0002-000000000001',
-   'b1000000-0000-0000-0000-000000000001',
-   '00000000-0000-0000-0000-000000000002',
-   '22000000-0000-0000-0000-000000000001',
-   'KCH-CR-D-1A',
-   'Daily Cooking - Morning Shift',
-   'Daily', 'min', 60, 60,
-   4.0000, 30, 0.3000,
-   NULL, 'standard', 7200.00,
-   5040.00, 7200.00,
-   '2026-02-26 10:30:00+05:30'),
-  -- C2: Housekeeping — Dusting, Brooming, Mopping (30 min daily)
-  ('e2000000-0000-0000-0001-000000000001',
-   'b2000000-0000-0000-0000-000000000002',
-   '00000000-0000-0000-0000-000000000001',
-   '11000000-0000-0000-0000-000000000001',
-   'HKP1-CR-D-1A',
-   'Dusting, Brooming, Mopping',
-   'Daily', 'min', 30, 30,
-   3.3000, 30, 0.3000,
-   NULL, 'standard', 2970.00,
-   2079.00, 2970.00,
-   '2026-03-02 09:45:00+05:30'),
-  -- C2: Car Care — Basic Car Care Routine (1 car daily)
-  ('e2000000-0000-0000-0002-000000000001',
-   'b2000000-0000-0000-0000-000000000002',
-   '00000000-0000-0000-0000-000000000003',
-   '33000000-0000-0000-0000-000000000001',
-   'CCR-CR-D-1A',
-   'Basic Car Care Routine',
-   'Daily', 'count_cars', 1, 15,
-   3.3000, 30, 0.3000,
-   15.00, 'compound_head', 1683.00,
-   1178.10, 1683.00,
-   '2026-03-02 09:45:00+05:30');
-
-
--- ── Plan Request Events (lifecycle: submitted → under_process → finalized → paid) ─
-
-INSERT INTO plan_request_events (plan_request_id, event_type, note, created_at) VALUES
-  -- Customer 1 lifecycle
-  ('b1000000-0000-0000-0000-000000000001', 'submitted',
-   'Customer submitted plan request for housekeeping + cooking.',
-   '2026-02-25 09:00:00+05:30'),
-  ('b1000000-0000-0000-0000-000000000001', 'under_process',
-   'Supervisor reviewing plan. Checking provider availability in Sector 45, Gurugram.',
-   '2026-02-25 11:30:00+05:30'),
-  ('b1000000-0000-0000-0000-000000000001', 'finalized',
-   'Plan finalized. Ravi Kumar assigned for housekeeping (07:00–07:45). Sunita Devi for cooking (08:30–09:30). Start date: 26 Feb.',
-   '2026-02-25 14:00:00+05:30'),
-  ('b1000000-0000-0000-0000-000000000001', 'paid',
-   'Payment confirmed. Plan activated from 26 Feb 2026.',
-   '2026-02-26 09:00:00+05:30'),
-  -- Customer 2 lifecycle
-  ('b2000000-0000-0000-0000-000000000002', 'submitted',
-   'Customer submitted plan request for housekeeping + car care.',
-   '2026-03-01 11:00:00+05:30'),
-  ('b2000000-0000-0000-0000-000000000002', 'under_process',
-   'Supervisor reviewing. Verifying provider availability in Sector 12, Noida.',
-   '2026-03-01 14:00:00+05:30'),
-  ('b2000000-0000-0000-0000-000000000002', 'finalized',
-   'Plan finalized. Priya Nair for housekeeping (08:00–08:30). Deepa Kumari for car care (07:00–07:15). Start date: 2 Mar.',
-   '2026-03-01 17:00:00+05:30'),
-  ('b2000000-0000-0000-0000-000000000002', 'paid',
-   'Payment confirmed. Plan activated from 2 Mar 2026.',
-   '2026-03-02 08:30:00+05:30');
-
-
--- ── Payments ─────────────────────────────────────────────────────────
-
-INSERT INTO payments (plan_request_id, amount, status, provider, provider_ref, created_at) VALUES
-  ('b1000000-0000-0000-0000-000000000001', 8158.50, 'succeeded', 'razorpay', 'pay_seed_c1_001', '2026-02-26 09:00:00+05:30'),
-  ('b2000000-0000-0000-0000-000000000002', 3257.10, 'succeeded', 'razorpay', 'pay_seed_c2_002', '2026-03-02 08:30:00+05:30');
-
-
--- ── Job Allocations ───────────────────────────────────────────────────
--- Service windows:
---   C1 HKP  → 07:00–07:45  (Ravi Kumar,   a0…001)
---   C1 KCH  → 08:30–09:30  (Sunita Devi,  a0…002)
---   C2 HKP  → 08:00–08:30  (Priya Nair,   a0…005)
---   C2 CCR  → 07:00–07:15  (Deepa Kumari, a0…007)
---
--- Status legend for past days:
---   Mar 8      : C1-KCH = status_not_marked (provider never submitted status)
---   Mar 9      : C2-HKP = scheduled_delayed → completed (recorded as completed_delayed)
---                C2-CCR = ongoing_delayed → completed
---   Mar 11–14  : all completed (normal)
---   Mar 15     : C2-HKP = completed_delayed (provider arrived late, still completed)
---   Mar 16     : C1-KCH = service_incomplete (cook had to leave early)
---                C2-CCR = cancelled_by_customer (customer was travelling)
---   Mar 17     : all completed
---   Mar 18 (today): C1-HKP = ongoing, C1-KCH = scheduled,
---                   C2-HKP = scheduled_delayed, C2-CCR = ongoing_delayed
---   Mar 19–25  : all scheduled
---   Mar 24     : C1-HKP = service_on_pause (customer pre-approved 1-day pause)
-
--- ─── March 8 (Fri, pre-history) ─── partial day for status variety ──
-INSERT INTO job_allocations (
-  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id,
-  scheduled_date, scheduled_start_time, scheduled_end_time,
-  actual_start_time, actual_end_time,
-  status, is_locked, supervisor_notes
-) VALUES
--- C1-HKP Mar 8 — completed normally
-('fa000000-0000-0000-0001-000000000000',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-08', '07:00', '07:45', '07:01', '07:46', 'completed', true, NULL),
--- C1-KCH Mar 8 — status_not_marked (provider never submitted job status)
-('fa000000-0000-0000-0002-000000000000',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-08', '08:30', '09:30', NULL, NULL,
- 'status_not_marked', true,
- 'Provider did not mark job status; auto-flagged after 24 h. Customer confirmed service was done.'),
--- C2-HKP Mar 8 — completed
-('fa000000-0000-0000-0003-000000000000',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-08', '08:00', '08:30', '08:00', '08:29', 'completed', true, NULL),
--- C2-CCR Mar 8 — completed
-('fa000000-0000-0000-0004-000000000000',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-08', '07:00', '07:15', '07:03', '07:17', 'completed', true, NULL);
-
--- ─── March 9 (Sat) — scheduled_delayed + ongoing_delayed examples ────
-INSERT INTO job_allocations (
-  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id,
-  scheduled_date, scheduled_start_time, scheduled_end_time,
-  actual_start_time, actual_end_time,
-  status, is_locked, supervisor_notes
-) VALUES
--- C1-HKP Mar 9 — completed
-('fa000000-0000-0000-0001-000000000099',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-09', '07:00', '07:45', '07:02', '07:48', 'completed', true, NULL),
--- C1-KCH Mar 9 — completed
-('fa000000-0000-0000-0002-000000000099',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-09', '08:30', '09:30', '08:33', '09:34', 'completed', true, NULL),
--- C2-HKP Mar 9 — completed_delayed (provider was delayed; arrived late but finished)
-('fa000000-0000-0000-0003-000000000099',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-09', '08:00', '08:30', '08:28', '08:58',
- 'completed_delayed', true,
- 'Provider marked scheduled_delayed → moved to ongoing_delayed → completed_delayed. Resolved same day.'),
--- C2-CCR Mar 9 — completed
-('fa000000-0000-0000-0004-000000000099',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-09', '07:00', '07:15', '07:01', '07:14', 'completed', true, NULL);
-
--- ─── March 11 (Mon) — all completed ─────────────────────────────────
-INSERT INTO job_allocations (
-  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id,
-  scheduled_date, scheduled_start_time, scheduled_end_time,
-  actual_start_time, actual_end_time,
-  status, is_locked, supervisor_notes
-) VALUES
--- C1-HKP Mar 11
-('fa000000-0000-0000-0001-000000000001',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-11', '07:00', '07:45', '07:02', '07:47', 'completed', true, NULL),
--- C1-KCH Mar 11
-('fa000000-0000-0000-0002-000000000001',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-11', '08:30', '09:30', '08:31', '09:32', 'completed', true, NULL),
--- C2-HKP Mar 11
-('fa000000-0000-0000-0003-000000000001',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-11', '08:00', '08:30', '08:01', '08:31', 'completed', true, NULL),
--- C2-CCR Mar 11
-('fa000000-0000-0000-0004-000000000001',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-11', '07:00', '07:15', '07:01', '07:14', 'completed', true, NULL),
-
--- ─── March 12 (Tue) — all completed ─────────────────────────────────
--- C1-HKP Mar 12
-('fa000000-0000-0000-0001-000000000002',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-12', '07:00', '07:45', '07:01', '07:44', 'completed', true, NULL),
--- C1-KCH Mar 12
-('fa000000-0000-0000-0002-000000000002',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-12', '08:30', '09:30', '08:33', '09:35', 'completed', true, NULL),
--- C2-HKP Mar 12
-('fa000000-0000-0000-0003-000000000002',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-12', '08:00', '08:30', '08:02', '08:33', 'completed', true, NULL),
--- C2-CCR Mar 12
-('fa000000-0000-0000-0004-000000000002',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-12', '07:00', '07:15', '07:03', '07:18', 'completed', true, NULL),
-
--- ─── March 13 (Wed) — all completed ─────────────────────────────────
--- C1-HKP Mar 13
-('fa000000-0000-0000-0001-000000000003',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-13', '07:00', '07:45', '07:00', '07:46', 'completed', true, NULL),
--- C1-KCH Mar 13
-('fa000000-0000-0000-0002-000000000003',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-13', '08:30', '09:30', '08:30', '09:31', 'completed', true, NULL),
--- C2-HKP Mar 13
-('fa000000-0000-0000-0003-000000000003',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-13', '08:00', '08:30', '08:00', '08:30', 'completed', true, NULL),
--- C2-CCR Mar 13
-('fa000000-0000-0000-0004-000000000003',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-13', '07:00', '07:15', '07:02', '07:16', 'completed', true, NULL),
-
--- ─── March 14 (Thu) — all completed ─────────────────────────────────
--- C1-HKP Mar 14
-('fa000000-0000-0000-0001-000000000004',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-14', '07:00', '07:45', '07:04', '07:49', 'completed', true, NULL),
--- C1-KCH Mar 14
-('fa000000-0000-0000-0002-000000000004',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-14', '08:30', '09:30', '08:32', '09:34', 'completed', true, NULL),
--- C2-HKP Mar 14
-('fa000000-0000-0000-0003-000000000004',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-14', '08:00', '08:30', '08:01', '08:29', 'completed', true, NULL),
--- C2-CCR Mar 14
-('fa000000-0000-0000-0004-000000000004',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-14', '07:00', '07:15', '07:01', '07:15', 'completed', true, NULL),
-
--- ─── March 15 (Fri) — C2-HKP = completed_delayed (provider ran late) ─
--- C1-HKP Mar 15
-('fa000000-0000-0000-0001-000000000005',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-15', '07:00', '07:45', '07:01', '07:46', 'completed', true, NULL),
--- C1-KCH Mar 15
-('fa000000-0000-0000-0002-000000000005',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-15', '08:30', '09:30', '08:35', '09:36', 'completed', true, NULL),
--- C2-HKP Mar 15 — completed_delayed
-('fa000000-0000-0000-0003-000000000005',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-15', '08:00', '08:30', '08:22', '08:52',
- 'completed_delayed', true, 'Provider arrived late due to traffic; service completed after delay.'),
--- C2-CCR Mar 15
-('fa000000-0000-0000-0004-000000000005',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-15', '07:00', '07:15', '07:02', '07:17', 'completed', true, NULL),
-
--- ─── March 16 (Sat) — C1-KCH = service_incomplete (cook left early) ─
--- C1-HKP Mar 16
-('fa000000-0000-0000-0001-000000000006',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-16', '07:00', '07:45', '07:03', '07:47', 'completed', true, NULL),
--- C1-KCH Mar 16 — service_incomplete
-('fa000000-0000-0000-0002-000000000006',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-16', '08:30', '09:30', '08:33', '09:05',
- 'service_incomplete', true,
- 'Cook had a personal emergency and left early; only breakfast prepared, lunch skipped.'),
--- C2-HKP Mar 16
-('fa000000-0000-0000-0003-000000000006',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-16', '08:00', '08:30', '08:01', '08:31', 'completed', true, NULL),
--- C2-CCR Mar 16 — cancelled_by_customer (customer was travelling)
-('fa000000-0000-0000-0004-000000000006',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-16', '07:00', '07:15', NULL, NULL,
- 'cancelled_by_customer', true, 'Customer cancelled; travelling out of city for the day.'),
-
--- ─── March 17 (Sun) — all completed ─────────────────────────────────
--- C1-HKP Mar 17
-('fa000000-0000-0000-0001-000000000007',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-17', '07:00', '07:45', '07:00', '07:45', 'completed', true, NULL),
--- C1-KCH Mar 17
-('fa000000-0000-0000-0002-000000000007',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-17', '08:30', '09:30', '08:31', '09:30', 'completed', true, NULL),
--- C2-HKP Mar 17
-('fa000000-0000-0000-0003-000000000007',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-17', '08:00', '08:30', '08:02', '08:31', 'completed', true, NULL),
--- C2-CCR Mar 17
-('fa000000-0000-0000-0004-000000000007',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-17', '07:00', '07:15', '07:01', '07:15', 'completed', true, NULL),
-
--- ─── March 18 (TODAY) — C1-HKP ongoing, C2-HKP scheduled_delayed, C2-CCR ongoing_delayed ─
--- C1-HKP Mar 18 — ongoing (provider already started)
-('fa000000-0000-0000-0001-000000000008',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-18', '07:00', '07:45', '07:03', NULL, 'ongoing', false, NULL),
--- C1-KCH Mar 18 — scheduled (cook not yet arrived)
-('fa000000-0000-0000-0002-000000000008',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-18', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 18 — scheduled_delayed (provider sent ahead notification of delay)
-('fa000000-0000-0000-0003-000000000008',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-18', '08:00', '08:30', NULL, NULL,
- 'scheduled_delayed', false,
- 'Provider notified delay via app — stuck in traffic; ETA ~30 min late.'),
--- C2-CCR Mar 18 — ongoing_delayed (provider started late, still in progress)
-('fa000000-0000-0000-0004-000000000008',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-18', '07:00', '07:15', '07:24', NULL,
- 'ongoing_delayed', false,
- 'Provider arrived late (07:24 vs 07:00 scheduled); service in progress.'),
-
--- ─── March 19 (Wed) — all scheduled ─────────────────────────────────
--- C1-HKP Mar 19
-('fa000000-0000-0000-0001-000000000009',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-19', '07:00', '07:45', NULL, NULL, 'scheduled', false, NULL),
--- C1-KCH Mar 19
-('fa000000-0000-0000-0002-000000000009',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-19', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 19
-('fa000000-0000-0000-0003-000000000009',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-19', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 19
-('fa000000-0000-0000-0004-000000000009',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-19', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL),
-
--- ─── March 20 (Thu) — all scheduled ─────────────────────────────────
--- C1-HKP Mar 20
-('fa000000-0000-0000-0001-000000000010',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-20', '07:00', '07:45', NULL, NULL, 'scheduled', false, NULL),
--- C1-KCH Mar 20
-('fa000000-0000-0000-0002-000000000010',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-20', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 20
-('fa000000-0000-0000-0003-000000000010',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-20', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 20
-('fa000000-0000-0000-0004-000000000010',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-20', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL),
-
--- ─── March 21 (Fri) — all scheduled ─────────────────────────────────
--- C1-HKP Mar 21
-('fa000000-0000-0000-0001-000000000011',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-21', '07:00', '07:45', NULL, NULL, 'scheduled', false, NULL),
--- C1-KCH Mar 21
-('fa000000-0000-0000-0002-000000000011',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-21', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 21
-('fa000000-0000-0000-0003-000000000011',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-21', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 21
-('fa000000-0000-0000-0004-000000000011',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-21', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL),
-
--- ─── March 22 (Sat) — all scheduled ─────────────────────────────────
--- C1-HKP Mar 22
-('fa000000-0000-0000-0001-000000000012',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-22', '07:00', '07:45', NULL, NULL, 'scheduled', false, NULL),
--- C1-KCH Mar 22
-('fa000000-0000-0000-0002-000000000012',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-22', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 22
-('fa000000-0000-0000-0003-000000000012',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-22', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 22
-('fa000000-0000-0000-0004-000000000012',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-22', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL),
-
--- ─── March 23 (Sun) — all scheduled ─────────────────────────────────
--- C1-HKP Mar 23
-('fa000000-0000-0000-0001-000000000013',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-23', '07:00', '07:45', NULL, NULL, 'scheduled', false, NULL),
--- C1-KCH Mar 23
-('fa000000-0000-0000-0002-000000000013',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-23', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 23
-('fa000000-0000-0000-0003-000000000013',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-23', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 23
-('fa000000-0000-0000-0004-000000000013',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-23', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL),
-
--- ─── March 24 (Mon) — C1-HKP = service_on_pause (customer approved pause) ─
--- C1-HKP Mar 24 — paused (customer requested 1-day break)
-('fa000000-0000-0000-0001-000000000014',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-24', '07:00', '07:45', NULL, NULL, 'service_on_pause', false,
- 'Service paused per customer request — approved via pause request PR-C1-001.'),
--- C1-KCH Mar 24
-('fa000000-0000-0000-0002-000000000014',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-24', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 24
-('fa000000-0000-0000-0003-000000000014',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-24', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 24
-('fa000000-0000-0000-0004-000000000014',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-24', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL),
-
--- ─── March 25 (Tue) — all scheduled ─────────────────────────────────
--- C1-HKP Mar 25
-('fa000000-0000-0000-0001-000000000015',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-25', '07:00', '07:45', NULL, NULL, 'scheduled', false, NULL),
--- C1-KCH Mar 25
-('fa000000-0000-0000-0002-000000000015',
- 'b1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001',
- '2026-03-25', '08:30', '09:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-HKP Mar 25
-('fa000000-0000-0000-0003-000000000015',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0001-000000000001',
- 'a0000000-0000-0000-0000-000000000005', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-25', '08:00', '08:30', NULL, NULL, 'scheduled', false, NULL),
--- C2-CCR Mar 25
-('fa000000-0000-0000-0004-000000000015',
- 'b2000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0002-000000000001',
- 'a0000000-0000-0000-0000-000000000007', 'c2000000-0000-0000-0000-000000000002',
- '2026-03-25', '07:00', '07:15', NULL, NULL, 'scheduled', false, NULL);
-
-
--- ── Pause Requests ────────────────────────────────────────────────────
--- One approved pause for Customer 1 (HKP only on Mar 24 — 1-day pause)
-
-INSERT INTO pause_requests (
-  id, customer_id, plan_request_id,
-  pause_type, pause_start_date, pause_end_date,
-  pause_duration_unit, pause_duration_value,
-  status, supervisor_approval_status,
-  created_at, updated_at
-) VALUES (
-  'cc000000-0000-0000-0001-000000000001',
-  'c1000000-0000-0000-0000-000000000001',
-  'b1000000-0000-0000-0000-000000000001',
-  'single_job',
-  '2026-03-24',
-  '2026-03-24',
-  'days', 1,
-  'active', 'approved',
-  '2026-03-20 18:00:00+05:30',
-  '2026-03-21 09:00:00+05:30'
-);
-
-
--- ── Tech Services Allowance (for Customer 1 — has HKP+KCH plan) ──────
-
-INSERT INTO tech_services_allowance (
-  plan_request_id, service_type, allowed_count, used_count,
-  current_month, current_year
-) VALUES
-  ('b1000000-0000-0000-0000-000000000001', 'electrician', 2, 0, 3, 2026),
-  ('b1000000-0000-0000-0000-000000000001', 'plumber',     2, 0, 3, 2026),
-  ('b1000000-0000-0000-0000-000000000001', 'carpenter',   1, 0, 3, 2026),
-  ('b2000000-0000-0000-0000-000000000002', 'electrician', 2, 0, 3, 2026),
-  ('b2000000-0000-0000-0000-000000000002', 'plumber',     2, 0, 3, 2026);
-
-
--- ── Seed Provider Sessions (long-lived; for easy login in dev/test) ───
--- Token format is deterministic so you can log in by pasting the token
--- into the habio_provider_session cookie, or just use the /provider/login
--- flow with the seeded phone numbers.
---
--- Provider phones: +919900000001 to +919900000007
--- Session tokens (copy into cookie habio_provider_session):
---   Ravi Kumar   → seed-provider-session-token-ravi-kumar-sp001
---   Sunita Devi  → seed-provider-session-token-sunita-devi-sp002
---   Priya Nair   → seed-provider-session-token-priya-nair-sp005
---   Deepa Kumari → seed-provider-session-token-deepa-kumari-sp007
-
-INSERT INTO provider_sessions (
-  id, service_provider_id, session_token, expires_at
-) VALUES
-  ('d1000000-0000-0000-0000-000000000001',
-   'a0000000-0000-0000-0000-000000000001',
-   'seed-provider-session-token-ravi-kumar-sp001',
-   '2027-12-31 23:59:59+05:30'),
-  ('d1000000-0000-0000-0000-000000000002',
-   'a0000000-0000-0000-0000-000000000002',
-   'seed-provider-session-token-sunita-devi-sp002',
-   '2027-12-31 23:59:59+05:30'),
-  ('d1000000-0000-0000-0000-000000000005',
-   'a0000000-0000-0000-0000-000000000005',
-   'seed-provider-session-token-priya-nair-sp005',
-   '2027-12-31 23:59:59+05:30'),
-  ('d1000000-0000-0000-0000-000000000007',
-   'a0000000-0000-0000-0000-000000000007',
-   'seed-provider-session-token-deepa-kumari-sp007',
-   '2027-12-31 23:59:59+05:30');
-
-
--- ── Seed Customer Sessions (long-lived; for easy login in dev/test) ───
--- Customer phones: +919800000001 (Ananya), +919800000002 (Vikram)
--- Session tokens (copy into cookie habio_session):
---   Ananya Sharma → seed-customer-session-token-ananya-sharma-c1
---   Vikram Patel  → seed-customer-session-token-vikram-patel-c2
-
-INSERT INTO customer_sessions (
-  id, customer_id, session_token, expires_at
-) VALUES
-  ('dc000000-0000-0000-0000-000000000001',
-   'c1000000-0000-0000-0000-000000000001',
-   'seed-customer-session-token-ananya-sharma-c1',
-   '2027-12-31 23:59:59+05:30'),
-  ('dc000000-0000-0000-0000-000000000002',
-   'c2000000-0000-0000-0000-000000000002',
-   'seed-customer-session-token-vikram-patel-c2',
-   '2027-12-31 23:59:59+05:30');
-
-
-
--- =====================================================================
--- STAFF AUTH SEED DATA (PR1)
--- Deterministic UUIDs: e0…  = locations, f0… = staff_accounts
--- =====================================================================
-
--- ── Locations ─────────────────────────────────────────────────────────
-
-INSERT INTO locations (id, name, city, sector) VALUES
-  ('e0000000-0000-0000-0000-000000000001', 'Sector 50-56 Cluster', 'Gurugram', '50-56'),
-  ('e0000000-0000-0000-0000-000000000002', 'Sector 57-63 Cluster', 'Gurugram', '57-63'),
-  ('e0000000-0000-0000-0000-000000000003', 'Sector 70-80 Cluster', 'Gurugram', '70-80');
-
-
--- ── Staff Accounts ────────────────────────────────────────────────────
--- Admin & ops_lead & managers use email+password (bcrypt via pgcrypto)
--- Supervisors use phone+OTP (no email/password)
---
--- Login credentials (dev only):
---   admin@habio.in       / admin123
---   rajesh@habio.in      / ops123
---   priya@habio.in       / mgr123
---   amit@habio.in        / mgr123
---   Supervisors: OTP = last 4 digits of phone
---     Suresh Yadav  phone=9100000001  OTP=0001
---     Deepak Singh  phone=9100000002  OTP=0002
---     Kavita Devi   phone=9100000003  OTP=0003
-
-INSERT INTO staff_accounts (
-  id, phone, name, email, password_hash, role, status, reports_to, location_id
-) VALUES
-  -- Admin
+INSERT INTO staff_accounts (id, phone, name, email, password_hash, role, status, reports_to, location_id) VALUES
+  -- Admin accounts (no reports_to, no location_id)
   ('f0000000-0000-0000-0000-000000000001',
-   '9000000001', 'Habio Admin', 'admin@habio.in',
-   crypt('admin123', gen_salt('bf', 10)),
+   '9000000001', 'Srihari Raman', 'srihari@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
    'admin', 'active', NULL, NULL),
-  -- Ops Lead
   ('f0000000-0000-0000-0000-000000000002',
-   '9000000002', 'Rajesh Kumar', 'rajesh@habio.in',
-   crypt('ops123', gen_salt('bf', 10)),
-   'ops_lead', 'active', 'f0000000-0000-0000-0000-000000000001', NULL),
-  -- Manager 1
+   '9000000002', 'Founder One', 'founder1@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'admin', 'active', NULL, NULL),
   ('f0000000-0000-0000-0000-000000000003',
-   '9000000003', 'Priya Sharma', 'priya@habio.in',
-   crypt('mgr123', gen_salt('bf', 10)),
-   'manager', 'active', 'f0000000-0000-0000-0000-000000000002', NULL),
-  -- Manager 2
+   '9000000003', 'Founder Two', 'founder2@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'admin', 'active', NULL, NULL),
+  -- Ops Lead (reports_to Srihari)
   ('f0000000-0000-0000-0000-000000000004',
-   '9000000004', 'Amit Verma', 'amit@habio.in',
-   crypt('mgr123', gen_salt('bf', 10)),
-   'manager', 'active', 'f0000000-0000-0000-0000-000000000002', NULL),
-  -- Supervisor 1 (phone OTP auth, no email/password)
+   '9000000004', 'Kiran Mehta', 'kiran@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'ops_lead', 'active', 'f0000000-0000-0000-0000-000000000001', NULL),
+  -- Managers (reports_to Kiran)
   ('f0000000-0000-0000-0000-000000000005',
-   '9100000001', 'Suresh Yadav', NULL, NULL,
-   'supervisor', 'active',
-   'f0000000-0000-0000-0000-000000000003',
-   'e0000000-0000-0000-0000-000000000001'),
-  -- Supervisor 2
+   '9000000005', 'Rahul Joshi', 'rahul@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'manager', 'active', 'f0000000-0000-0000-0000-000000000004', NULL),
   ('f0000000-0000-0000-0000-000000000006',
-   '9100000002', 'Deepak Singh', NULL, NULL,
-   'supervisor', 'active',
-   'f0000000-0000-0000-0000-000000000003',
-   'e0000000-0000-0000-0000-000000000002'),
-  -- Supervisor 3
+   '9000000006', 'Preethi Menon', 'preethi@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'manager', 'active', 'f0000000-0000-0000-0000-000000000004', NULL),
+  -- Supervisors (reports_to their manager, have location_id)
   ('f0000000-0000-0000-0000-000000000007',
-   '9100000003', 'Kavita Devi', NULL, NULL,
-   'supervisor', 'active',
-   'f0000000-0000-0000-0000-000000000004',
-   'e0000000-0000-0000-0000-000000000003');
+   '9100000001', 'Amit Bhatnagar', 'amit@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'supervisor', 'active', 'f0000000-0000-0000-0000-000000000005',
+   'e0000000-0000-0000-0000-000000000001'),  -- Sector 45
+  ('f0000000-0000-0000-0000-000000000008',
+   '9100000002', 'Sneha Kapoor', 'sneha@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'supervisor', 'active', 'f0000000-0000-0000-0000-000000000005',
+   'e0000000-0000-0000-0000-000000000002'),  -- Sector 50
+  ('f0000000-0000-0000-0000-000000000009',
+   '9100000003', 'Vijay Rao', 'vijay@habio.in',
+   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
+   'supervisor', 'active', 'f0000000-0000-0000-0000-000000000006',
+   'e0000000-0000-0000-0000-000000000003'); -- Sector 57
 
 
--- ── Provider Team Assignments ─────────────────────────────────────────
--- Supervisor 1 (Suresh): providers 001, 002, 007, 008
--- Supervisor 2 (Deepak): providers 003, 004, 006, 007  (007 shared)
--- Supervisor 3 (Kavita): providers 005, 009, 010
-
-INSERT INTO provider_team_assignments (service_provider_id, supervisor_id) VALUES
-  -- Supervisor 1 team
-  ('a0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000005'),
-  ('a0000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000005'),
-  ('a0000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000005'),
-  ('a0000000-0000-0000-0000-000000000008', 'f0000000-0000-0000-0000-000000000005'),
-  -- Supervisor 2 team
-  ('a0000000-0000-0000-0000-000000000003', 'f0000000-0000-0000-0000-000000000006'),
-  ('a0000000-0000-0000-0000-000000000004', 'f0000000-0000-0000-0000-000000000006'),
-  ('a0000000-0000-0000-0000-000000000006', 'f0000000-0000-0000-0000-000000000006'),
-  ('a0000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000006'),  -- shared
-  -- Supervisor 3 team
-  ('a0000000-0000-0000-0000-000000000005', 'f0000000-0000-0000-0000-000000000007'),
-  ('a0000000-0000-0000-0000-000000000009', 'f0000000-0000-0000-0000-000000000007'),
-  ('a0000000-0000-0000-0000-000000000010', 'f0000000-0000-0000-0000-000000000007');
-
-
--- ── Assign supervisors to existing plan requests ──────────────────────
--- Customer 1 (Ananya) uses providers Ravi+Sunita → Supervisor 1
--- Customer 2 (Vikram) uses providers Priya+Deepa → Supervisor 3
-
-UPDATE plan_requests
-  SET assigned_supervisor_id = 'f0000000-0000-0000-0000-000000000005'
-  WHERE id = 'b1000000-0000-0000-0000-000000000001';
-
-UPDATE plan_requests
-  SET assigned_supervisor_id = 'f0000000-0000-0000-0000-000000000007'
-  WHERE id = 'b2000000-0000-0000-0000-000000000002';
-
-
--- ── Update job_allocations with supervisor_id ─────────────────────────
-
-UPDATE job_allocations
-  SET supervisor_id = 'f0000000-0000-0000-0000-000000000005'
-  WHERE service_provider_id IN (
-    'a0000000-0000-0000-0000-000000000001',
-    'a0000000-0000-0000-0000-000000000002'
-  );
-
-UPDATE job_allocations
-  SET supervisor_id = 'f0000000-0000-0000-0000-000000000007'
-  WHERE service_provider_id IN (
-    'a0000000-0000-0000-0000-000000000005',
-    'a0000000-0000-0000-0000-000000000007'
-  );
-
-
--- ── Seed Staff Sessions (long-lived; for easy login in dev/test) ──────
--- Copy into cookie habio_staff_session:
---   Suresh Yadav (supervisor1) → seed-staff-session-token-suresh-yadav-sv001
---   Kavita Devi  (supervisor3) → seed-staff-session-token-kavita-devi-sv003
---   Habio Admin  (admin)       → seed-staff-session-token-habio-admin-adm001
+-- ── 5. Staff Sessions ─────────────────────────────────────────────────────
+-- Token: sess-staff-{UUID-last-segment}, expires 2026-04-20
 
 INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
   ('fb000000-0000-0000-0000-000000000001',
-   'f0000000-0000-0000-0000-000000000005',
-   'seed-staff-session-token-suresh-yadav-sv001',
-   '2027-12-31 23:59:59+05:30'),
-  ('fb000000-0000-0000-0000-000000000002',
-   'f0000000-0000-0000-0000-000000000007',
-   'seed-staff-session-token-kavita-devi-sv003',
-   '2027-12-31 23:59:59+05:30'),
-  ('fb000000-0000-0000-0000-000000000003',
    'f0000000-0000-0000-0000-000000000001',
-   'seed-staff-session-token-habio-admin-adm001',
-   '2027-12-31 23:59:59+05:30');
-
-
--- =====================================================================
--- SEED V2 — Full Simulated Ecosystem (PR3)
--- New UUID prefixes:
---   aa000000-… = new admin accounts
---   e0000000-…000004/005 = new specific locations
---   dd000000-… = new service providers
---   ee000000-… = new customers (PR3 lifecycle stages)
---   b3000000-… = new plan requests
---   b6000000-… = new plan request items
---   ca000000-… = new job allocations
---   da000000-… = new issue tickets
--- =====================================================================
-
-
--- ── PR3 Locations (more specific sectors) ─────────────────────────────
--- Sector 50 and Sector 57 specific (separate from old cluster locations)
-
-INSERT INTO locations (id, name, city, sector, state, pincode, is_active) VALUES
-  ('e0000000-0000-0000-0000-000000000004', 'Sector 50, Gurugram', 'Gurugram', '50', 'Haryana', '122018', true),
-  ('e0000000-0000-0000-0000-000000000005', 'Sector 57, Gurugram', 'Gurugram', '57', 'Haryana', '122011', true);
-
-
--- ── PR3 Admin Accounts ────────────────────────────────────────────────
--- Fixed bcrypt hash for "admin123": $2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6
--- Three founders added alongside existing Habio Admin account
-
-INSERT INTO staff_accounts (
-  id, phone, name, email, password_hash, role, status, reports_to, location_id
-) VALUES
-  ('aa000000-0000-0000-0000-000000000001',
-   '9000001001', 'Srihari Raman', 'srihari@habio.in',
-   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
-   'admin', 'active', NULL, NULL),
-  ('aa000000-0000-0000-0000-000000000002',
-   '9000001002', 'Founder One', 'founder1@habio.in',
-   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
-   'admin', 'active', NULL, NULL),
-  ('aa000000-0000-0000-0000-000000000003',
-   '9000001003', 'Founder Two', 'founder2@habio.in',
-   '$2a$10$rQEY0tJh3z5OV5GXxVJXae7GMJDPaWBHT7G5./2bHqJh8X7hKqVi6',
-   'admin', 'active', NULL, NULL);
-
--- Seed staff sessions for new admins
-INSERT INTO staff_sessions (id, staff_id, session_token, expires_at) VALUES
+   'sess-staff-000000000001', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000002',
+   'f0000000-0000-0000-0000-000000000002',
+   'sess-staff-000000000002', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000003',
+   'f0000000-0000-0000-0000-000000000003',
+   'sess-staff-000000000003', '2026-04-20 23:59:59+05:30'),
   ('fb000000-0000-0000-0000-000000000004',
-   'aa000000-0000-0000-0000-000000000001',
-   'seed-staff-session-token-srihari-raman-adm002',
-   '2027-12-31 23:59:59+05:30');
+   'f0000000-0000-0000-0000-000000000004',
+   'sess-staff-000000000004', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000005',
+   'f0000000-0000-0000-0000-000000000005',
+   'sess-staff-000000000005', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000006',
+   'f0000000-0000-0000-0000-000000000006',
+   'sess-staff-000000000006', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000007',
+   'f0000000-0000-0000-0000-000000000007',
+   'sess-staff-000000000007', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000008',
+   'f0000000-0000-0000-0000-000000000008',
+   'sess-staff-000000000008', '2026-04-20 23:59:59+05:30'),
+  ('fb000000-0000-0000-0000-000000000009',
+   'f0000000-0000-0000-0000-000000000009',
+   'sess-staff-000000000009', '2026-04-20 23:59:59+05:30');
 
 
--- ── PR3 Service Providers ─────────────────────────────────────────────
--- dd000000-… prefix
--- HKP: Lakshmi (d01), Meena (d02), Geeta (d03)
--- KCH: Sunita (d04), Rekha (d05)
--- CCR: Mohan (d06), Raju (d07)
--- GCR: Dinesh (d08)
--- Technician: Vijay-Electrical (d09), Sunil-Plumber (d10)
--- Shared Partners: Anil-AC (d11), Deepak-RO (d12)
+-- ── 6. Service Providers ──────────────────────────────────────────────────
+-- UUID: a0000000-0000-0000-0000-0000000000NN
 
-INSERT INTO service_providers (id, phone, name, specialization, is_active, status) VALUES
-  ('dd000000-0000-0000-0000-000000000001', '9500000101', 'Lakshmi Devi',   'Housekeeping',              true,  'active'),
-  ('dd000000-0000-0000-0000-000000000002', '9500000102', 'Meena Kumari',   'Housekeeping',              true,  'active'),
-  ('dd000000-0000-0000-0000-000000000003', '9500000103', 'Geeta Bai',      'Housekeeping',              true,  'active'),
-  ('dd000000-0000-0000-0000-000000000004', '9500000104', 'Sunita Rani',    'Kitchen Services',          true,  'active'),
-  ('dd000000-0000-0000-0000-000000000005', '9500000105', 'Rekha Devi',     'Kitchen Services',          true,  'active'),
-  ('dd000000-0000-0000-0000-000000000006', '9500000106', 'Mohan Lal',      'Car Care',                  true,  'active'),
-  ('dd000000-0000-0000-0000-000000000007', '9500000107', 'Raju Kumar',     'Car Care',                  true,  'active'),
-  ('dd000000-0000-0000-0000-000000000008', '9500000108', 'Dinesh Yadav',   'Garden Care',               true,  'active'),
-  ('dd000000-0000-0000-0000-000000000009', '9500000109', 'Vijay Singh',    'Technician - Electrical',   true,  'active'),
-  ('dd000000-0000-0000-0000-000000000010', '9500000110', 'Sunil Verma',    'Technician - Plumber',      true,  'active'),
-  ('dd000000-0000-0000-0000-000000000011', '9500000111', 'Anil Sharma',    'Technician Partner AC',     true,  'active'),
-  ('dd000000-0000-0000-0000-000000000012', '9500000112', 'Deepak Tiwari',  'Technician Partner RO',     true,  'active');
+INSERT INTO service_providers (id, phone, name, provider_type, status, aadhaar, address, permanent_address, location_id) VALUES
+  ('a0000000-0000-0000-0000-000000000001', '+919900000001', 'Ravi Kumar',
+   'housekeeping', 'available',
+   '1234-5678-0001', 'House 12, Sector 45, Gurugram', 'Village Ravi, UP',
+   'e0000000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000002', '+919900000002', 'Sunita Devi',
+   'kitchen', 'available',
+   '1234-5678-0002', 'Flat 3B, Sector 45, Gurugram', 'Village Sunita, Bihar',
+   'e0000000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000003', '+919900000003', 'Priya Nair',
+   'housekeeping', 'available',
+   '1234-5678-0003', 'Room 5, Sector 50, Gurugram', 'Village Priya, Kerala',
+   'e0000000-0000-0000-0000-000000000002'),
+  ('a0000000-0000-0000-0000-000000000004', '+919900000004', 'Deepa Kumari',
+   'car_care', 'available',
+   '1234-5678-0004', 'Flat 9C, Sector 45, Gurugram', 'Village Deepa, Bihar',
+   'e0000000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000005', '+919900000005', 'Ajay Yadav',
+   'housekeeping', 'available',
+   '1234-5678-0005', 'Room 11, Sector 57, Gurugram', 'Village Ajay, Haryana',
+   'e0000000-0000-0000-0000-000000000003'),
+  ('a0000000-0000-0000-0000-000000000006', '+919900000006', 'Rekha Bai',
+   'kitchen', 'available',
+   '1234-5678-0006', 'House 3, Sector 57, Gurugram', 'Village Rekha, MP',
+   'e0000000-0000-0000-0000-000000000003'),
+  ('a0000000-0000-0000-0000-000000000007', '+919900000007', 'Satish Verma',
+   'garden_care', 'available',
+   '1234-5678-0007', 'Room 7, Sector 50, Gurugram', 'Village Satish, Rajasthan',
+   'e0000000-0000-0000-0000-000000000002'),
+  ('a0000000-0000-0000-0000-000000000008', '+919900000008', 'Ramesh Gupta',
+   'housekeeping', 'available',
+   '1234-5678-0008', 'House 22, Sector 50, Gurugram', 'Village Ramesh, UP',
+   'e0000000-0000-0000-0000-000000000002'),
+  ('a0000000-0000-0000-0000-000000000009', '+919900000009', 'Arjun Sharma',
+   'technician_electrical', 'available',
+   '1234-5678-0009', 'Room 15, Sector 50, Gurugram', 'Village Arjun, Rajasthan',
+   'e0000000-0000-0000-0000-000000000002'),
+  ('a0000000-0000-0000-0000-000000000010', '+919900000010', 'Mohan Singh',
+   'technician_plumber', 'available',
+   '1234-5678-0010', 'Room 8, Sector 57, Gurugram', 'Village Mohan, MP',
+   'e0000000-0000-0000-0000-000000000003'),
+  ('a0000000-0000-0000-0000-000000000011', '+919900000011', 'Lalit Tiwari',
+   'technician_carpenter', 'available',
+   '1234-5678-0011', 'House 5, Sector 45, Gurugram', 'Village Lalit, UP',
+   'e0000000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000012', '+919900000012', 'Dinesh Kumar',
+   'technician_ac', 'available',
+   '1234-5678-0012', 'Room 2, Sector 57, Gurugram', 'Village Dinesh, Bihar',
+   'e0000000-0000-0000-0000-000000000003');
 
 
--- ── PR3 Provider Team Assignments ─────────────────────────────────────
--- Suresh (f0000000-000005) team: Lakshmi, Sunita, Mohan, Dinesh, Vijay, Anil (shared), Deepak-RO (shared)
--- Deepak/Ramesh (f0000000-000006) team: Meena, Rekha, Raju, Sunil, Anil (shared), Deepak-RO (shared)
--- Kavita (f0000000-000007) team: Geeta, Lakshmi (shared with Suresh)
+-- ── 7. Provider Week Offs ─────────────────────────────────────────────────
+-- effective_from: 2026-01-01, effective_to: NULL (permanent)
+
+INSERT INTO provider_week_offs (service_provider_id, day_of_week, effective_from, effective_to) VALUES
+  ('a0000000-0000-0000-0000-000000000001', 'sunday',    '2026-01-01', NULL),  -- Ravi
+  ('a0000000-0000-0000-0000-000000000002', 'sunday',    '2026-01-01', NULL),  -- Sunita
+  ('a0000000-0000-0000-0000-000000000003', 'wednesday', '2026-01-01', NULL),  -- Priya
+  ('a0000000-0000-0000-0000-000000000004', 'sunday',    '2026-01-01', NULL),  -- Deepa
+  ('a0000000-0000-0000-0000-000000000005', 'thursday',  '2026-01-01', NULL),  -- Ajay
+  ('a0000000-0000-0000-0000-000000000006', 'thursday',  '2026-01-01', NULL),  -- Rekha
+  ('a0000000-0000-0000-0000-000000000007', 'monday',    '2026-01-01', NULL),  -- Satish
+  ('a0000000-0000-0000-0000-000000000008', 'wednesday', '2026-01-01', NULL),  -- Ramesh
+  ('a0000000-0000-0000-0000-000000000009', 'sunday',    '2026-01-01', NULL),  -- Arjun
+  ('a0000000-0000-0000-0000-000000000010', 'sunday',    '2026-01-01', NULL),  -- Mohan
+  ('a0000000-0000-0000-0000-000000000011', 'tuesday',   '2026-01-01', NULL),  -- Lalit
+  ('a0000000-0000-0000-0000-000000000012', 'friday',    '2026-01-01', NULL);  -- Dinesh
+
+
+-- ── 8. Provider Sessions (providers 01–08) ────────────────────────────────
+
+INSERT INTO provider_sessions (id, service_provider_id, session_token, expires_at) VALUES
+  ('d0000000-0000-0000-0000-000000000001',
+   'a0000000-0000-0000-0000-000000000001', 'prov-sess-01', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000002',
+   'a0000000-0000-0000-0000-000000000002', 'prov-sess-02', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000003',
+   'a0000000-0000-0000-0000-000000000003', 'prov-sess-03', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000004',
+   'a0000000-0000-0000-0000-000000000004', 'prov-sess-04', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000005',
+   'a0000000-0000-0000-0000-000000000005', 'prov-sess-05', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000006',
+   'a0000000-0000-0000-0000-000000000006', 'prov-sess-06', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000007',
+   'a0000000-0000-0000-0000-000000000007', 'prov-sess-07', '2026-04-20 23:59:59+05:30'),
+  ('d0000000-0000-0000-0000-000000000008',
+   'a0000000-0000-0000-0000-000000000008', 'prov-sess-08', '2026-04-20 23:59:59+05:30');
+
+
+-- ── 9. Provider Team Assignments ──────────────────────────────────────────
+-- Amit (f0…007) → Sector 45: Ravi, Sunita, Deepa, Lalit
+-- Sneha (f0…008) → Sector 50: Priya, Satish, Ramesh, Arjun
+-- Vijay (f0…009) → Sector 57: Ajay, Rekha, Mohan, Dinesh
 
 INSERT INTO provider_team_assignments (service_provider_id, supervisor_id) VALUES
-  -- Suresh's team
-  ('dd000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000005'), -- Lakshmi
-  ('dd000000-0000-0000-0000-000000000004', 'f0000000-0000-0000-0000-000000000005'), -- Sunita
-  ('dd000000-0000-0000-0000-000000000006', 'f0000000-0000-0000-0000-000000000005'), -- Mohan
-  ('dd000000-0000-0000-0000-000000000008', 'f0000000-0000-0000-0000-000000000005'), -- Dinesh
-  ('dd000000-0000-0000-0000-000000000009', 'f0000000-0000-0000-0000-000000000005'), -- Vijay
-  ('dd000000-0000-0000-0000-000000000011', 'f0000000-0000-0000-0000-000000000005'), -- Anil (shared)
-  ('dd000000-0000-0000-0000-000000000012', 'f0000000-0000-0000-0000-000000000005'), -- Deepak-RO (shared)
-  -- Deepak/Ramesh's team
-  ('dd000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000006'), -- Meena
-  ('dd000000-0000-0000-0000-000000000005', 'f0000000-0000-0000-0000-000000000006'), -- Rekha
-  ('dd000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000006'), -- Raju
-  ('dd000000-0000-0000-0000-000000000010', 'f0000000-0000-0000-0000-000000000006'), -- Sunil
-  ('dd000000-0000-0000-0000-000000000011', 'f0000000-0000-0000-0000-000000000006'), -- Anil (shared)
-  ('dd000000-0000-0000-0000-000000000012', 'f0000000-0000-0000-0000-000000000006'), -- Deepak-RO (shared)
-  -- Kavita's team
-  ('dd000000-0000-0000-0000-000000000003', 'f0000000-0000-0000-0000-000000000007'), -- Geeta
-  ('dd000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000007'); -- Lakshmi (shared with Suresh)
+  -- Amit's team (Sector 45)
+  ('a0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000007'), -- Ravi
+  ('a0000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000007'), -- Sunita
+  ('a0000000-0000-0000-0000-000000000004', 'f0000000-0000-0000-0000-000000000007'), -- Deepa
+  ('a0000000-0000-0000-0000-000000000011', 'f0000000-0000-0000-0000-000000000007'), -- Lalit
+  -- Sneha's team (Sector 50)
+  ('a0000000-0000-0000-0000-000000000003', 'f0000000-0000-0000-0000-000000000008'), -- Priya
+  ('a0000000-0000-0000-0000-000000000007', 'f0000000-0000-0000-0000-000000000008'), -- Satish
+  ('a0000000-0000-0000-0000-000000000008', 'f0000000-0000-0000-0000-000000000008'), -- Ramesh
+  ('a0000000-0000-0000-0000-000000000009', 'f0000000-0000-0000-0000-000000000008'), -- Arjun
+  -- Vijay's team (Sector 57)
+  ('a0000000-0000-0000-0000-000000000005', 'f0000000-0000-0000-0000-000000000009'), -- Ajay
+  ('a0000000-0000-0000-0000-000000000006', 'f0000000-0000-0000-0000-000000000009'), -- Rekha
+  ('a0000000-0000-0000-0000-000000000010', 'f0000000-0000-0000-0000-000000000009'), -- Mohan
+  ('a0000000-0000-0000-0000-000000000012', 'f0000000-0000-0000-0000-000000000009'); -- Dinesh
 
 
--- ── PR3 Customers ─────────────────────────────────────────────────────
--- ee000000-… prefix, 8 customers at various lifecycle stages
+-- ── 10. Customers ────────────────────────────────────────────────────────
+-- UUID: c0000000-0000-0000-0000-0000000000NN
 
 INSERT INTO customers (id, phone, name) VALUES
-  ('ee000000-0000-0000-0000-000000000001', '9200000001', 'Rahul Verma'),
-  ('ee000000-0000-0000-0000-000000000002', '9200000002', 'Neha Gupta'),
-  ('ee000000-0000-0000-0000-000000000003', '9200000003', 'Vikram Patel'),
-  ('ee000000-0000-0000-0000-000000000004', '9200000004', 'Anita Reddy'),
-  ('ee000000-0000-0000-0000-000000000005', '9200000005', 'Deepak Joshi'),
-  ('ee000000-0000-0000-0000-000000000006', '9200000006', 'Pooja Mehta'),
-  ('ee000000-0000-0000-0000-000000000007', '9200000007', 'Karan Singh'),
-  ('ee000000-0000-0000-0000-000000000008', '9200000008', 'Shreya Iyer');
+  ('c0000000-0000-0000-0000-000000000001', '+919800000001', 'Ananya Sharma'),
+  ('c0000000-0000-0000-0000-000000000002', '+919800000002', 'Vikram Patel'),
+  ('c0000000-0000-0000-0000-000000000003', '+919800000003', 'Meera Nambiar'),
+  ('c0000000-0000-0000-0000-000000000004', '+919800000004', 'Sanjay Gupta'),
+  ('c0000000-0000-0000-0000-000000000005', '+919800000005', 'Pallavi Singh'),
+  ('c0000000-0000-0000-0000-000000000006', '+919800000006', 'Rohit Khanna'),
+  ('c0000000-0000-0000-0000-000000000007', '+919800000007', 'Kavitha Iyer'),
+  ('c0000000-0000-0000-0000-000000000008', '+919800000008', 'Nitin Agarwal');
+
+
+-- ── 11. Customer Profiles ─────────────────────────────────────────────────
 
 INSERT INTO customer_profiles (
-  customer_id, flat_no, building, society, sector, city, pincode, home_type, bhk, bathrooms, balconies
+  customer_id, flat_no, building, society, sector, city, pincode,
+  home_type, bhk, bathrooms, balconies, cars, plants,
+  diet_pref, people_count, cook_window_morning, cook_window_evening
 ) VALUES
-  ('ee000000-0000-0000-0000-000000000001', 'B-402', 'Orchid Block', 'DLF Magnolias', '50', 'Gurugram', '122018', 'apartment', 3, 3, 2),
-  ('ee000000-0000-0000-0000-000000000002', 'A-201', 'Rose Block',   'Ardee City',    '57', 'Gurugram', '122011', 'apartment', 2, 2, 1),
-  ('ee000000-0000-0000-0000-000000000003', 'C-105', 'Jasmine Tower','Suncity',       '50', 'Gurugram', '122018', 'apartment', 3, 2, 2),
-  ('ee000000-0000-0000-0000-000000000004', 'D-301', 'Oak Tower',    'Hamilton Court','57', 'Gurugram', '122011', 'apartment', 2, 2, 1),
-  ('ee000000-0000-0000-0000-000000000005', 'F-501', 'Palm Block',   'Nirvana Country','50','Gurugram', '122018', 'apartment', 3, 3, 2),
-  ('ee000000-0000-0000-0000-000000000006', 'G-102', 'Coral Block',  'Emaar Palm Hills','57','Gurugram','122011', 'apartment', 2, 2, 1),
-  ('ee000000-0000-0000-0000-000000000007', 'H-203', 'Ivy Block',    'Unitech Escape', '50','Gurugram', '122018', 'apartment', 2, 2, 1),
-  ('ee000000-0000-0000-0000-000000000008', 'J-401', 'Cedar Block',  'Pioneer Park',   '50','Gurugram', '122018', 'apartment', 3, 2, 2);
+  -- C1: Ananya Sharma, Sector 45, 2BHK
+  ('c0000000-0000-0000-0000-000000000001',
+   '304', 'Tower B', 'Green Valley Residency', 'Sector 45', 'Gurugram', '122003',
+   'apartment', 2, 2, 1, 1, 0, 'veg', 3, true, false),
+  -- C2: Vikram Patel, Sector 45, 3BHK
+  ('c0000000-0000-0000-0000-000000000002',
+   '102', 'Sunrise Block', 'Palm Grove Society', 'Sector 45', 'Gurugram', '122003',
+   'apartment', 3, 2, 2, 2, 0, 'non-veg', 4, false, false),
+  -- C3: Meera Nambiar, Sector 50, 2BHK
+  ('c0000000-0000-0000-0000-000000000003',
+   '205', 'Orchid Block', 'DLF Magnolias', 'Sector 50', 'Gurugram', '122018',
+   'apartment', 2, 2, 1, 1, 20, 'veg', 2, false, false),
+  -- C4: Sanjay Gupta, Sector 50, 3BHK
+  ('c0000000-0000-0000-0000-000000000004',
+   'B-301', 'Oak Tower', 'Suncity Township', 'Sector 50', 'Gurugram', '122018',
+   'apartment', 3, 3, 2, 1, 0, 'non-veg', 5, false, false),
+  -- C5: Pallavi Singh, Sector 57, 2BHK
+  ('c0000000-0000-0000-0000-000000000005',
+   'A-201', 'Rose Block', 'Ardee City', 'Sector 57', 'Gurugram', '122011',
+   'apartment', 2, 2, 1, 0, 0, 'veg', 2, false, false),
+  -- C6: Rohit Khanna, Sector 57, 4BHK
+  ('c0000000-0000-0000-0000-000000000006',
+   'F-501', 'Pearl Tower', 'Hamilton Court', 'Sector 57', 'Gurugram', '122011',
+   'apartment', 4, 3, 3, 2, 0, 'non-veg', 6, false, false),
+  -- C7: Kavitha Iyer, Sector 45, 2BHK
+  ('c0000000-0000-0000-0000-000000000007',
+   '503', 'Jasmine Block', 'Nirvana Country', 'Sector 45', 'Gurugram', '122003',
+   'apartment', 2, 1, 1, 0, 0, 'veg', 2, false, false),
+  -- C8: Nitin Agarwal, Sector 50, 3BHK
+  ('c0000000-0000-0000-0000-000000000008',
+   'C-105', 'Cedar Block', 'Pioneer Park', 'Sector 50', 'Gurugram', '122018',
+   'apartment', 3, 2, 2, 1, 0, 'non-veg', 3, false, false);
 
 
--- ── PR3 Carts ─────────────────────────────────────────────────────────
--- Customer 6 (Pooja): active cart with items
--- Customer 7 (Karan): no cart
-
-INSERT INTO carts (id, customer_id, status) VALUES
-  ('ec000000-0000-0000-0000-000000000006', 'ee000000-0000-0000-0000-000000000006', 'active');
-
-INSERT INTO cart_items (
-  cart_id, category_id, job_id, job_code,
-  frequency_label, unit_type, unit_value, minutes,
-  base_rate_per_unit, instances_per_month, discount_pct, formula_type,
-  base_price_monthly, unit_price_monthly, mrp_monthly,
-  sort_order
-) VALUES
-  ('ec000000-0000-0000-0000-000000000006',
-   '00000000-0000-0000-0000-000000000001',
-   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
-   'HKP1-CR-D-1A',
-   'Daily', 'min', 45, 45,
-   3.3000, 30, 0.3000, 'standard',
-   4455.00, 3118.50, 4455.00,
-   1),
-  ('ec000000-0000-0000-0000-000000000006',
-   '00000000-0000-0000-0000-000000000002',
-   (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1),
-   'KCH-CR-D-1A',
-   'Daily', 'min', 60, 60,
-   4.0000, 30, 0.3000, 'standard',
-   7200.00, 5040.00, 7200.00,
-   2);
-
-
--- ── PR3 Plan Requests ─────────────────────────────────────────────────
--- b3000000-… prefix
--- C1 Rahul: active, Suresh (supervisor 1)
--- C2 Neha: active, Deepak/Ramesh (supervisor 2)
--- C3 Vikram: captain_review_pending, Suresh
--- C4 Anita: payment_pending, Deepak/Ramesh
--- C5 Deepak Joshi: captain_allocation_pending (no supervisor yet)
--- C8 Shreya: active, Kavita (supervisor 3)
-
-INSERT INTO plan_requests (
-  id, customer_id, request_code, status,
-  total_price_monthly, plan_start_date, is_recurring,
-  assigned_supervisor_id
-) VALUES
-  ('b3000000-0000-0000-0000-000000000001',
-   'ee000000-0000-0000-0000-000000000001',
-   'HAB-PR3-001', 'active', 6500.00, '2026-02-01', true,
-   'f0000000-0000-0000-0000-000000000005'), -- Suresh
-  ('b3000000-0000-0000-0000-000000000002',
-   'ee000000-0000-0000-0000-000000000002',
-   'HAB-PR3-002', 'active', 5800.00, '2026-02-15', true,
-   'f0000000-0000-0000-0000-000000000006'), -- Deepak/Ramesh
-  ('b3000000-0000-0000-0000-000000000003',
-   'ee000000-0000-0000-0000-000000000003',
-   'HAB-PR3-003', 'captain_review_pending', 7200.00, NULL, true,
-   'f0000000-0000-0000-0000-000000000005'), -- Suresh
-  ('b3000000-0000-0000-0000-000000000004',
-   'ee000000-0000-0000-0000-000000000004',
-   'HAB-PR3-004', 'payment_pending', 5200.00, NULL, true,
-   'f0000000-0000-0000-0000-000000000006'), -- Deepak/Ramesh
-  ('b3000000-0000-0000-0000-000000000005',
-   'ee000000-0000-0000-0000-000000000005',
-   'HAB-PR3-005', 'captain_allocation_pending', 6000.00, NULL, true,
-   NULL), -- no supervisor yet
-  ('b3000000-0000-0000-0000-000000000008',
-   'ee000000-0000-0000-0000-000000000008',
-   'HAB-PR3-008', 'active', 7500.00, '2026-03-01', true,
-   'f0000000-0000-0000-0000-000000000007'); -- Kavita
-
-
--- ── PR3 Plan Request Items (simple, for active/pending plans) ─────────
-
-INSERT INTO plan_request_items (
-  id, plan_request_id, job_id, category_id, title,
-  frequency_label, unit_type, unit_value, minutes,
-  base_rate_per_unit, instances_per_month, discount_pct,
-  time_multiple, formula_type, base_price_monthly,
-  price_monthly, mrp_monthly,
-  is_addon
-) VALUES
-  -- Rahul (C1): HKP daily + Kitchen morning
-  ('b6000000-0000-0000-0001-000000000001',
-   'b3000000-0000-0000-0000-000000000001',
-   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping',
-   'Daily', 'min', 45, 45,
-   3.3000, 30, 0.3000,
-   NULL, 'standard', 4455.00,
-   3118.50, 4455.00,
-   false),
-  ('b6000000-0000-0000-0001-000000000002',
-   'b3000000-0000-0000-0000-000000000001',
-   (SELECT id FROM service_jobs WHERE code = 'KCH-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000002',
-   'Daily Cooking - Morning Shift',
-   'Daily', 'min', 60, 60,
-   4.0000, 30, 0.3000,
-   NULL, 'standard', 7200.00,
-   5040.00, 7200.00,
-   false),
-  -- Neha (C2): HKP daily + Car Care
-  ('b6000000-0000-0000-0002-000000000001',
-   'b3000000-0000-0000-0000-000000000002',
-   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping',
-   'Daily', 'min', 45, 45,
-   3.3000, 30, 0.3000,
-   NULL, 'standard', 4455.00,
-   3118.50, 4455.00,
-   false),
-  ('b6000000-0000-0000-0002-000000000002',
-   'b3000000-0000-0000-0000-000000000002',
-   (SELECT id FROM service_jobs WHERE code = 'CCR-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000003',
-   'Basic Car Care Routine',
-   'Daily', 'count_cars', 1, 15,
-   3.3000, 30, 0.3000,
-   15.00, 'compound_head', 1683.00,
-   1178.10, 1683.00,
-   false),
-  -- Vikram (C3): HKP + Kitchen (review pending)
-  ('b6000000-0000-0000-0003-000000000001',
-   'b3000000-0000-0000-0000-000000000003',
-   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping',
-   'Daily', 'min', 45, 45,
-   3.3000, 30, 0.3000,
-   NULL, 'standard', 4455.00,
-   3118.50, 4455.00,
-   false),
-  -- Shreya (C8): HKP + Garden
-  ('b6000000-0000-0000-0008-000000000001',
-   'b3000000-0000-0000-0000-000000000008',
-   (SELECT id FROM service_jobs WHERE code = 'HKP1-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000001',
-   'Dusting, Brooming, Mopping',
-   'Daily', 'min', 45, 45,
-   3.3000, 30, 0.3000,
-   NULL, 'standard', 4455.00,
-   3118.50, 4455.00,
-   false),
-  ('b6000000-0000-0000-0008-000000000002',
-   'b3000000-0000-0000-0000-000000000008',
-   (SELECT id FROM service_jobs WHERE code = 'GCR-CR-D-1A' LIMIT 1),
-   '00000000-0000-0000-0000-000000000004',
-   'Basic Garden Care Routine',
-   'Daily', 'count_plants', 10, 5,
-   3.3000, 30, 0.3000,
-   0.50, 'compound_head', 891.00,
-   623.70, 891.00,
-   false);
-
-
--- ── PR3 Plan Request Events ────────────────────────────────────────────
-
-INSERT INTO plan_request_events (plan_request_id, event_type, note, created_at) VALUES
-  ('b3000000-0000-0000-0000-000000000001', 'submitted',  'Customer submitted plan request', '2026-01-25 10:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000001', 'supervisor_assigned', 'Assigned to Suresh Yadav', '2026-01-26 11:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000001', 'captain_reviewed', 'On-site review completed', '2026-01-28 15:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000001', 'payment_received', 'First payment received', '2026-01-31 18:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000001', 'status_changed', 'Plan activated', '2026-02-01 09:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000002', 'submitted',  'Customer submitted plan request', '2026-02-08 14:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000002', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-02-09 10:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000002', 'captain_reviewed', 'On-site review completed', '2026-02-11 16:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000002', 'payment_received', 'First payment received', '2026-02-14 20:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000002', 'status_changed', 'Plan activated', '2026-02-15 09:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000003', 'submitted',  'Customer submitted plan request', '2026-03-10 11:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000003', 'supervisor_assigned', 'Assigned to Suresh Yadav for review', '2026-03-11 09:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000004', 'submitted',  'Customer submitted plan request', '2026-03-12 12:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000004', 'supervisor_assigned', 'Assigned to Deepak Singh', '2026-03-13 10:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000004', 'captain_reviewed', 'On-site review done, payment link sent', '2026-03-15 14:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000005', 'submitted',  'Customer submitted plan request', '2026-03-17 09:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000008', 'submitted',  'Customer submitted plan request', '2026-02-22 10:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000008', 'supervisor_assigned', 'Assigned to Kavita Devi', '2026-02-23 11:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000008', 'captain_reviewed', 'On-site review completed', '2026-02-25 15:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000008', 'payment_received', 'First payment received', '2026-02-28 18:00:00+05:30'),
-  ('b3000000-0000-0000-0000-000000000008', 'status_changed', 'Plan activated', '2026-03-01 09:00:00+05:30');
-
-
--- ── PR3 Job Allocations (for active plans — Rahul C1, Neha C2, Shreya C8) ──
-
-INSERT INTO job_allocations (
-  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id,
-  supervisor_id, scheduled_date, scheduled_start_time, scheduled_end_time, status, is_locked
-) VALUES
-  -- Rahul (C1): HKP by Lakshmi, Kitchen by Sunita — today
-  ('ca000000-0000-0000-0001-000000000001',
-   'b3000000-0000-0000-0000-000000000001',
-   'b6000000-0000-0000-0001-000000000001',
-   'dd000000-0000-0000-0000-000000000001',
-   'ee000000-0000-0000-0000-000000000001',
-   'f0000000-0000-0000-0000-000000000005',
-   CURRENT_DATE, '07:00', '07:45', 'scheduled', false),
-  ('ca000000-0000-0000-0001-000000000002',
-   'b3000000-0000-0000-0000-000000000001',
-   'b6000000-0000-0000-0001-000000000002',
-   'dd000000-0000-0000-0000-000000000004',
-   'ee000000-0000-0000-0000-000000000001',
-   'f0000000-0000-0000-0000-000000000005',
-   CURRENT_DATE, '08:30', '09:30', 'scheduled', false),
-  -- Neha (C2): HKP by Meena, Car Care by Raju — today
-  ('ca000000-0000-0000-0002-000000000001',
-   'b3000000-0000-0000-0000-000000000002',
-   'b6000000-0000-0000-0002-000000000001',
-   'dd000000-0000-0000-0000-000000000002',
-   'ee000000-0000-0000-0000-000000000002',
-   'f0000000-0000-0000-0000-000000000006',
-   CURRENT_DATE, '08:00', '08:45', 'scheduled', false),
-  ('ca000000-0000-0000-0002-000000000002',
-   'b3000000-0000-0000-0000-000000000002',
-   'b6000000-0000-0000-0002-000000000002',
-   'dd000000-0000-0000-0000-000000000007',
-   'ee000000-0000-0000-0000-000000000002',
-   'f0000000-0000-0000-0000-000000000006',
-   CURRENT_DATE, '07:00', '07:15', 'scheduled', false),
-  -- Shreya (C8): HKP by Geeta (Kavita team) — today
-  ('ca000000-0000-0000-0008-000000000001',
-   'b3000000-0000-0000-0000-000000000008',
-   'b6000000-0000-0000-0008-000000000001',
-   'dd000000-0000-0000-0000-000000000003',
-   'ee000000-0000-0000-0000-000000000008',
-   'f0000000-0000-0000-0000-000000000007',
-   CURRENT_DATE, '07:30', '08:15', 'scheduled', false);
-
-
--- ── PR3 Issue Tickets (for active customers C1 and C2) ────────────────
-
-INSERT INTO issue_tickets (
-  id, customer_id, plan_request_id, title, description, status, priority, created_at
-) VALUES
-  ('da000000-0000-0000-0000-000000000001',
-   'ee000000-0000-0000-0000-000000000001',
-   'b3000000-0000-0000-0000-000000000001',
-   'Mop not cleaned properly',
-   'The housekeeper left the mop dirty yesterday. Please ensure it is cleaned after use.',
-   'open', 'medium',
-   '2026-03-17 09:00:00+05:30'),
-  ('da000000-0000-0000-0000-000000000002',
-   'ee000000-0000-0000-0000-000000000002',
-   'b3000000-0000-0000-0000-000000000002',
-   'Car not cleaned in driver seat area',
-   'Inner cleaning of car was missed near the driver seat last time.',
-   'in_progress', 'low',
-   '2026-03-16 15:00:00+05:30');
-
--- ── PR3 Customer Sessions (long-lived; for easy dev login) ───────────
+-- ── 12. Customer Sessions (C1–C6 active customers) ────────────────────────
 
 INSERT INTO customer_sessions (id, customer_id, session_token, expires_at) VALUES
-  ('ec100000-0000-0000-0000-000000000001',
-   'ee000000-0000-0000-0000-000000000001',
-   'seed-customer-session-token-rahul-verma-pr3-c1',
-   '2027-12-31 23:59:59+05:30'),
-  ('ec100000-0000-0000-0000-000000000002',
-   'ee000000-0000-0000-0000-000000000002',
-   'seed-customer-session-token-neha-gupta-pr3-c2',
-   '2027-12-31 23:59:59+05:30');
+  ('dc000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-000000000001', 'cust-sess-01', '2026-04-20 23:59:59+05:30'),
+  ('dc000000-0000-0000-0000-000000000002',
+   'c0000000-0000-0000-0000-000000000002', 'cust-sess-02', '2026-04-20 23:59:59+05:30'),
+  ('dc000000-0000-0000-0000-000000000003',
+   'c0000000-0000-0000-0000-000000000003', 'cust-sess-03', '2026-04-20 23:59:59+05:30'),
+  ('dc000000-0000-0000-0000-000000000004',
+   'c0000000-0000-0000-0000-000000000004', 'cust-sess-04', '2026-04-20 23:59:59+05:30'),
+  ('dc000000-0000-0000-0000-000000000005',
+   'c0000000-0000-0000-0000-000000000005', 'cust-sess-05', '2026-04-20 23:59:59+05:30'),
+  ('dc000000-0000-0000-0000-000000000006',
+   'c0000000-0000-0000-0000-000000000006', 'cust-sess-06', '2026-04-20 23:59:59+05:30');
 
--- ── END OF SEED V2 ────────────────────────────────────────────────────
+
+-- ── 13. Plan Requests ─────────────────────────────────────────────────────
+-- UUID: b0000000-0000-0000-0000-0000000000NN
+
+INSERT INTO plan_requests (
+  id, request_code, customer_id, status,
+  total_price_monthly, plan_start_date, plan_active_start_date, is_recurring,
+  assigned_supervisor_id, created_at, updated_at
+) VALUES
+  -- P1: Ananya | active | HKP 45min + KCH 60min | supervisor Amit
+  ('b0000000-0000-0000-0000-000000000001',
+   'HABIO-2026-0001',
+   'c0000000-0000-0000-0000-000000000001',
+   'active',
+   8158.50, '2026-02-26', '2026-02-26', true,
+   'f0000000-0000-0000-0000-000000000007',
+   '2026-02-20 10:00:00+05:30', '2026-02-26 09:00:00+05:30'),
+  -- P2: Vikram | active | HKP 30min + CCR 2 cars | supervisor Amit
+  ('b0000000-0000-0000-0000-000000000002',
+   'HABIO-2026-0002',
+   'c0000000-0000-0000-0000-000000000002',
+   'active',
+   4435.20, '2026-03-02', '2026-03-02', true,
+   'f0000000-0000-0000-0000-000000000007',
+   '2026-02-25 11:00:00+05:30', '2026-03-02 09:00:00+05:30'),
+  -- P3: Meera | active | HKP 45min + GCR 20 plants | supervisor Sneha
+  ('b0000000-0000-0000-0000-000000000003',
+   'HABIO-2026-0003',
+   'c0000000-0000-0000-0000-000000000003',
+   'active',
+   4365.90, '2026-03-05', '2026-03-05', true,
+   'f0000000-0000-0000-0000-000000000008',
+   '2026-02-28 14:00:00+05:30', '2026-03-05 09:00:00+05:30'),
+  -- P4: Sanjay | paused | HKP 45min + HKP2-CR-W-6A 3 bathrooms | supervisor Sneha
+  ('b0000000-0000-0000-0000-000000000004',
+   'HABIO-2026-0004',
+   'c0000000-0000-0000-0000-000000000004',
+   'paused',
+   4378.50, '2026-02-15', '2026-02-15', true,
+   'f0000000-0000-0000-0000-000000000008',
+   '2026-02-10 09:00:00+05:30', '2026-03-18 08:00:00+05:30'),
+  -- P5: Pallavi | payment_pending | HKP 30min | supervisor Vijay
+  ('b0000000-0000-0000-0000-000000000005',
+   'HABIO-2026-0005',
+   'c0000000-0000-0000-0000-000000000005',
+   'payment_pending',
+   2079.00, NULL, NULL, true,
+   'f0000000-0000-0000-0000-000000000009',
+   '2026-03-15 16:00:00+05:30', '2026-03-17 10:00:00+05:30'),
+  -- P6: Rohit | captain_review_pending | HKP 45min + CCR 2 cars | supervisor Vijay
+  ('b0000000-0000-0000-0000-000000000006',
+   'HABIO-2026-0006',
+   'c0000000-0000-0000-0000-000000000006',
+   'captain_review_pending',
+   5474.70, NULL, NULL, true,
+   'f0000000-0000-0000-0000-000000000009',
+   '2026-03-18 11:00:00+05:30', '2026-03-19 09:00:00+05:30'),
+  -- P7: Kavitha | submitted | HKP 30min | no supervisor yet
+  ('b0000000-0000-0000-0000-000000000007',
+   'HABIO-2026-0007',
+   'c0000000-0000-0000-0000-000000000007',
+   'submitted',
+   2079.00, NULL, NULL, true,
+   NULL,
+   '2026-03-20 14:00:00+05:30', '2026-03-20 14:00:00+05:30'),
+  -- P8: Nitin | cart_in_progress | (not submitted yet)
+  ('b0000000-0000-0000-0000-000000000008',
+   'HABIO-2026-0008',
+   'c0000000-0000-0000-0000-000000000008',
+   'cart_in_progress',
+   0.00, NULL, NULL, true,
+   NULL,
+   '2026-03-21 08:30:00+05:30', '2026-03-21 08:30:00+05:30');
+
+
+-- ── 14. Plan Request Items (P1–P7; P8 is cart_in_progress, no items) ──────
+-- UUID scheme: e[plan]000000-0000-0000-[item]-000000000001
+
+INSERT INTO plan_request_items (
+  id, plan_request_id, category_id, job_id, job_code,
+  title, frequency_label, unit_type, unit_value, minutes,
+  base_rate_per_unit, instances_per_month, discount_pct,
+  time_multiple, formula_type, base_price_monthly,
+  price_monthly, mrp_monthly, is_addon, updated_at
+) VALUES
+  -- P1-1: Ananya HKP 45min daily
+  ('e1000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000, NULL, 'standard', 4455.00,
+   3118.50, 4455.00, false, '2026-02-26 09:00:00+05:30'),
+  -- P1-2: Ananya KCH 60min daily morning
+  ('e1000000-0000-0000-0002-000000000001',
+   'b0000000-0000-0000-0000-000000000001',
+   '00000000-0000-0000-0000-000000000002',
+   '22000000-0000-0000-0000-000000000001',
+   'KCH-CR-D-1A', 'Daily Cooking - Morning Shift',
+   'Daily', 'min', 60, 60,
+   4.0000, 30, 0.3000, NULL, 'standard', 7200.00,
+   5040.00, 7200.00, false, '2026-02-26 09:00:00+05:30'),
+  -- P2-1: Vikram HKP 30min daily
+  ('e2000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000002',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 30, 30,
+   3.3000, 30, 0.3000, NULL, 'standard', 2970.00,
+   2079.00, 2970.00, false, '2026-03-02 09:00:00+05:30'),
+  -- P2-2: Vikram CCR 2 cars daily
+  ('e2000000-0000-0000-0002-000000000001',
+   'b0000000-0000-0000-0000-000000000002',
+   '00000000-0000-0000-0000-000000000003',
+   '33000000-0000-0000-0000-000000000001',
+   'CCR-CR-D-1A', 'Basic Car Care Routine',
+   'Daily', 'count_cars', 2, 30,
+   3.3000, 30, 0.3000, 15.00, 'compound_head', 3366.00,
+   2356.20, 3366.00, false, '2026-03-02 09:00:00+05:30'),
+  -- P3-1: Meera HKP 45min daily
+  ('e3000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000003',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000, NULL, 'standard', 4455.00,
+   3118.50, 4455.00, false, '2026-03-05 09:00:00+05:30'),
+  -- P3-2: Meera GCR 20 plants daily
+  ('e3000000-0000-0000-0002-000000000001',
+   'b0000000-0000-0000-0000-000000000003',
+   '00000000-0000-0000-0000-000000000004',
+   '44000000-0000-0000-0000-000000000001',
+   'GCR-CR-D-1A', 'Basic Garden Care Routine',
+   'Daily', 'count_plants', 20, 10,
+   3.3000, 30, 0.3000, 0.50, 'compound_head', 1782.00,
+   1247.40, 1782.00, false, '2026-03-05 09:00:00+05:30'),
+  -- P4-1: Sanjay HKP 45min daily
+  ('e4000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000004',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000, NULL, 'standard', 4455.00,
+   3118.50, 4455.00, false, '2026-02-15 09:00:00+05:30'),
+  -- P4-2: Sanjay HKP2-CR-W-6A 3 bathrooms weekly deep clean
+  ('e4000000-0000-0000-0002-000000000001',
+   'b0000000-0000-0000-0000-000000000004',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000006',
+   'HKP2-CR-W-6A', 'Washroom / Toilet Deep Clean',
+   'Weekly', 'count_washrooms', 3, 90,
+   5.0000, 4, 0.3000, 30.00, 'time_multiple', 1800.00,
+   1260.00, 1800.00, false, '2026-02-15 09:00:00+05:30'),
+  -- P5-1: Pallavi HKP 30min daily
+  ('e5000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000005',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 30, 30,
+   3.3000, 30, 0.3000, NULL, 'standard', 2970.00,
+   2079.00, 2970.00, false, '2026-03-17 10:00:00+05:30'),
+  -- P6-1: Rohit HKP 45min daily
+  ('e6000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000006',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 45, 45,
+   3.3000, 30, 0.3000, NULL, 'standard', 4455.00,
+   3118.50, 4455.00, false, '2026-03-19 09:00:00+05:30'),
+  -- P6-2: Rohit CCR 2 cars daily
+  ('e6000000-0000-0000-0002-000000000001',
+   'b0000000-0000-0000-0000-000000000006',
+   '00000000-0000-0000-0000-000000000003',
+   '33000000-0000-0000-0000-000000000001',
+   'CCR-CR-D-1A', 'Basic Car Care Routine',
+   'Daily', 'count_cars', 2, 30,
+   3.3000, 30, 0.3000, 15.00, 'compound_head', 3366.00,
+   2356.20, 3366.00, false, '2026-03-19 09:00:00+05:30'),
+  -- P7-1: Kavitha HKP 30min daily
+  ('e7000000-0000-0000-0001-000000000001',
+   'b0000000-0000-0000-0000-000000000007',
+   '00000000-0000-0000-0000-000000000001',
+   '11000000-0000-0000-0000-000000000001',
+   'HKP1-CR-D-1A', 'Dusting, Brooming, Mopping',
+   'Daily', 'min', 30, 30,
+   3.3000, 30, 0.3000, NULL, 'standard', 2970.00,
+   2079.00, 2970.00, false, '2026-03-20 14:00:00+05:30');
+
+
+-- ── 15. Plan Request Events (full lifecycle audit trail) ──────────────────
+-- event_type values use the new plan_request_status names
+
+INSERT INTO plan_request_events (plan_request_id, event_type, note, created_at) VALUES
+  -- P1 Ananya: full lifecycle → active
+  ('b0000000-0000-0000-0000-000000000001', 'cart_in_progress',
+   'Customer started building their plan.', '2026-02-20 10:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000001', 'submitted',
+   'Customer submitted plan: Housekeeping 45min + Morning Cooking 60min.', '2026-02-20 10:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000001', 'captain_allocation_pending',
+   'Plan queued for supervisor assignment in Sector 45.', '2026-02-20 11:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000001', 'captain_review_pending',
+   'Assigned to Amit Bhatnagar for on-site review.', '2026-02-21 09:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000001', 'payment_pending',
+   'Captain review complete. Ravi Kumar (HKP 07:00-07:45) + Sunita Devi (KCH 08:30-09:30). Payment link sent.', '2026-02-23 14:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000001', 'active',
+   'Payment confirmed. Plan activated from 26 Feb 2026.', '2026-02-26 09:00:00+05:30'),
+  -- P2 Vikram: full lifecycle → active
+  ('b0000000-0000-0000-0000-000000000002', 'cart_in_progress',
+   'Customer started building their plan.', '2026-02-25 11:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000002', 'submitted',
+   'Customer submitted plan: Housekeeping 30min + Car Care 2 cars.', '2026-02-25 11:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000002', 'captain_allocation_pending',
+   'Plan queued for supervisor assignment in Sector 45.', '2026-02-25 12:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000002', 'captain_review_pending',
+   'Assigned to Amit Bhatnagar.', '2026-02-26 09:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000002', 'payment_pending',
+   'Review done. Ravi Kumar (HKP 07:45-08:15) + Deepa Kumari (CCR 07:00-07:30). Payment link sent.', '2026-02-27 15:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000002', 'active',
+   'Payment confirmed. Plan activated from 2 Mar 2026.', '2026-03-02 09:00:00+05:30'),
+  -- P3 Meera: full lifecycle → active
+  ('b0000000-0000-0000-0000-000000000003', 'cart_in_progress',
+   'Customer started building their plan.', '2026-02-28 14:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000003', 'submitted',
+   'Customer submitted plan: Housekeeping 45min + Garden Care 20 plants.', '2026-02-28 14:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000003', 'captain_allocation_pending',
+   'Plan queued for supervisor in Sector 50.', '2026-02-28 15:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000003', 'captain_review_pending',
+   'Assigned to Sneha Kapoor.', '2026-03-01 10:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000003', 'payment_pending',
+   'Review done. Priya Nair (HKP 07:00-07:45) + Satish Verma (GCR 07:45-08:25). Payment link sent.', '2026-03-02 16:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000003', 'active',
+   'Payment confirmed. Plan activated from 5 Mar 2026.', '2026-03-05 09:00:00+05:30'),
+  -- P4 Sanjay: full lifecycle → active → paused
+  ('b0000000-0000-0000-0000-000000000004', 'cart_in_progress',
+   'Customer started building their plan.', '2026-02-10 09:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000004', 'submitted',
+   'Customer submitted plan: Housekeeping 45min + Washroom Deep Clean 3 bathrooms.', '2026-02-10 09:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000004', 'captain_allocation_pending',
+   'Plan queued for supervisor in Sector 50.', '2026-02-10 10:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000004', 'captain_review_pending',
+   'Assigned to Sneha Kapoor.', '2026-02-11 09:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000004', 'payment_pending',
+   'Review done. Ramesh Gupta (HKP+Deep Clean 08:30-09:15). Payment link sent.', '2026-02-12 14:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000004', 'active',
+   'Payment confirmed. Plan activated from 15 Feb 2026.', '2026-02-15 09:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000004', 'paused',
+   'Customer requested vacation pause 18 Mar – 28 Mar. Approved by Sneha Kapoor.', '2026-03-18 08:00:00+05:30'),
+  -- P5 Pallavi: lifecycle → payment_pending
+  ('b0000000-0000-0000-0000-000000000005', 'cart_in_progress',
+   'Customer started building their plan.', '2026-03-15 16:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000005', 'submitted',
+   'Customer submitted plan: Housekeeping 30min.', '2026-03-15 16:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000005', 'captain_allocation_pending',
+   'Plan queued for supervisor in Sector 57.', '2026-03-15 17:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000005', 'captain_review_pending',
+   'Assigned to Vijay Rao for review.', '2026-03-16 09:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000005', 'payment_pending',
+   'Review done. Ajay Yadav assigned (HKP 08:00-08:30). Payment link sent.', '2026-03-17 10:00:00+05:30'),
+  -- P6 Rohit: lifecycle → captain_review_pending
+  ('b0000000-0000-0000-0000-000000000006', 'cart_in_progress',
+   'Customer started building their plan.', '2026-03-18 11:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000006', 'submitted',
+   'Customer submitted plan: Housekeeping 45min + Car Care 2 cars.', '2026-03-18 11:30:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000006', 'captain_allocation_pending',
+   'Plan queued for supervisor in Sector 57.', '2026-03-18 12:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000006', 'captain_review_pending',
+   'Assigned to Vijay Rao for on-site review.', '2026-03-19 09:00:00+05:30'),
+  -- P7 Kavitha: cart_in_progress → submitted
+  ('b0000000-0000-0000-0000-000000000007', 'cart_in_progress',
+   'Customer started building their plan.', '2026-03-20 14:00:00+05:30'),
+  ('b0000000-0000-0000-0000-000000000007', 'submitted',
+   'Customer submitted plan: Housekeeping 30min.', '2026-03-20 14:15:00+05:30'),
+  -- P8 Nitin: cart_in_progress only
+  ('b0000000-0000-0000-0000-000000000008', 'cart_in_progress',
+   'Customer is browsing and adding services to their plan.', '2026-03-21 08:30:00+05:30');
+
+
+-- ── 16. Payments ─────────────────────────────────────────────────────────
+
+INSERT INTO payments (id, plan_request_id, amount, status, provider, provider_ref, payment_link, payment_link_expires_at, paid_at, created_at) VALUES
+  -- P1: succeeded
+  ('ba000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000001',
+   8158.50, 'succeeded', 'razorpay', 'pay_seed_p1_001',
+   NULL, NULL, '2026-02-26 09:00:00+05:30',
+   '2026-02-23 14:00:00+05:30'),
+  -- P2: succeeded
+  ('ba000000-0000-0000-0000-000000000002',
+   'b0000000-0000-0000-0000-000000000002',
+   4435.20, 'succeeded', 'razorpay', 'pay_seed_p2_001',
+   NULL, NULL, '2026-03-02 09:00:00+05:30',
+   '2026-02-27 15:00:00+05:30'),
+  -- P3: succeeded
+  ('ba000000-0000-0000-0000-000000000003',
+   'b0000000-0000-0000-0000-000000000003',
+   4365.90, 'succeeded', 'razorpay', 'pay_seed_p3_001',
+   NULL, NULL, '2026-03-05 09:00:00+05:30',
+   '2026-03-02 16:00:00+05:30'),
+  -- P4: succeeded
+  ('ba000000-0000-0000-0000-000000000004',
+   'b0000000-0000-0000-0000-000000000004',
+   4378.50, 'succeeded', 'razorpay', 'pay_seed_p4_001',
+   NULL, NULL, '2026-02-15 09:00:00+05:30',
+   '2026-02-12 14:00:00+05:30'),
+  -- P5: pending — link generated, awaiting payment
+  ('ba000000-0000-0000-0000-000000000005',
+   'b0000000-0000-0000-0000-000000000005',
+   2079.00, 'pending', 'razorpay', NULL,
+   'https://pay.habio.in/link/P5-MOCK-001',
+   '2026-03-23 23:59:59+05:30', NULL,
+   '2026-03-17 10:00:00+05:30');
+
+
+-- ── 17. Job Allocations ───────────────────────────────────────────────────
+-- Date range: 2026-03-03 (Tue) to 2026-03-28 (Sat). Today = 2026-03-21 (Sat).
+-- March 2026 calendar:
+--   Mon=2,9,16,23 | Tue=3,10,17,24 | Wed=4,11,18,25 | Thu=5,12,19,26
+--   Fri=6,13,20,27 | Sat=7,14,21,28 | Sun=1,8,15,22
+--
+-- Provider week-offs:
+--   Ravi(a01)=sunday, Sunita(a02)=sunday, Deepa(a04)=sunday
+--   Priya(a03)=wednesday, Ramesh(a08)=wednesday
+--   Satish(a07)=monday
+--
+-- Plans:
+--   P1: Ananya | HKP Ravi 07:00-07:45, KCH Sunita 08:30-09:30 | sup Amit(f07)
+--   P2: Vikram | HKP Ravi 07:45-08:15, CCR Deepa 07:00-07:30  | sup Amit(f07)
+--   P3: Meera  | HKP Priya 07:00-07:45, GCR Satish 07:45-08:25| sup Sneha(f08)
+--   P4: Sanjay | HKP Ramesh 08:30-09:15 (paused from Mar 18)   | sup Sneha(f08)
+--
+-- Status strategy (past = before Mar 21):
+--   Most days: completed | A few: completed_delayed, incomplete, cancelled_by_customer, status_not_marked
+--   Mar 21 (today): mix of in_progress, scheduled, scheduled_delayed, in_progress_delayed
+--   Mar 22+: scheduled
+--   P4 from Mar 19+: service_on_pause (Mar 18 = Wed = Ramesh's off day)
+--
+-- actual_start_time / actual_end_time are now TIMESTAMPTZ
+
+
+-- ─── P1: Ananya — HKP (Ravi) + KCH (Sunita) ─────────────────────────────
+-- Ravi off sunday: skip Mar 8,15,22 | Sunita off sunday: skip Mar 8,15,22
+-- (Ravi also serves P2 07:45-08:15, no time conflict with P1 07:00-07:45)
+
+INSERT INTO job_allocations (
+  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id, supervisor_id,
+  scheduled_date, scheduled_start_time, scheduled_end_time,
+  actual_start_time, actual_end_time,
+  status, is_locked, supervisor_notes
+) VALUES
+-- === P1-HKP (Ravi, 07:00-07:45) ===
+('fa110000-0000-0000-0000-202603030000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-03','07:00','07:45','2026-03-03 07:01:00+05:30','2026-03-03 07:46:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603040000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-04','07:00','07:45','2026-03-04 07:02:00+05:30','2026-03-04 07:47:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-05','07:00','07:45','2026-03-05 07:00:00+05:30','2026-03-05 07:44:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-06','07:00','07:45','2026-03-06 07:03:00+05:30','2026-03-06 07:48:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-07','07:00','07:45','2026-03-07 07:01:00+05:30','2026-03-07 07:45:00+05:30',
+ 'completed',true,NULL),
+-- Mar 8 = Sun, Ravi off — no allocation
+('fa110000-0000-0000-0000-202603090000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-09','07:00','07:45','2026-03-09 07:02:00+05:30','2026-03-09 07:46:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-10','07:00','07:45','2026-03-10 07:01:00+05:30','2026-03-10 07:45:00+05:30',
+ 'completed',true,NULL),
+-- Mar 11 — completed_delayed (arrived 15 min late)
+('fa110000-0000-0000-0000-202603110000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-11','07:00','07:45','2026-03-11 07:16:00+05:30','2026-03-11 08:01:00+05:30',
+ 'completed_delayed',true,'Provider arrived 16 min late due to traffic. Completed full service.'),
+('fa110000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-12','07:00','07:45','2026-03-12 07:02:00+05:30','2026-03-12 07:47:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-13','07:00','07:45','2026-03-13 07:00:00+05:30','2026-03-13 07:44:00+05:30',
+ 'completed',true,NULL),
+-- Mar 14 — cancelled (admin/supervisor cancelled)
+('fa110000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-14','07:00','07:45',NULL,NULL,
+ 'cancelled',true,'Provider reported illness; service cancelled for the day.'),
+-- Mar 15 = Sun, Ravi off — no allocation
+('fa110000-0000-0000-0000-202603160000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-16','07:00','07:45','2026-03-16 07:03:00+05:30','2026-03-16 07:48:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-17','07:00','07:45','2026-03-17 07:01:00+05:30','2026-03-17 07:46:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603180000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-18','07:00','07:45','2026-03-18 07:02:00+05:30','2026-03-18 07:47:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-19','07:00','07:45','2026-03-19 07:00:00+05:30','2026-03-19 07:45:00+05:30',
+ 'completed',true,NULL),
+('fa110000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-20','07:00','07:45','2026-03-20 07:01:00+05:30','2026-03-20 07:46:00+05:30',
+ 'completed',true,NULL),
+-- Mar 21 (TODAY) — P1-HKP in_progress (Ravi started)
+('fa110000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-21','07:00','07:45','2026-03-21 07:03:00+05:30',NULL,
+ 'in_progress',false,NULL),
+-- Mar 22 = Sun, Ravi off — no allocation
+-- Mar 23–28 scheduled
+('fa110000-0000-0000-0000-202603230000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-23','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+('fa110000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-24','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+-- Mar 24 pause request is pending (PR2) - HKP still scheduled
+('fa110000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-26','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+('fa110000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-27','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+('fa110000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-28','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+
+-- === P1-KCH (Sunita, 08:30-09:30) ===
+('fa120000-0000-0000-0000-202603030000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-03','08:30','09:30','2026-03-03 08:31:00+05:30','2026-03-03 09:32:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603040000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-04','08:30','09:30','2026-03-04 08:33:00+05:30','2026-03-04 09:35:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-05','08:30','09:30','2026-03-05 08:30:00+05:30','2026-03-05 09:30:00+05:30',
+ 'completed',true,NULL),
+-- Mar 6 — status_not_marked (cook never submitted status; auto-flagged)
+('fa120000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-06','08:30','09:30',NULL,NULL,
+ 'status_not_marked',true,'Auto-flagged after 24h. Customer confirmed service was done.'),
+('fa120000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-07','08:30','09:30','2026-03-07 08:32:00+05:30','2026-03-07 09:33:00+05:30',
+ 'completed',true,NULL),
+-- Mar 8 = Sun, Sunita off
+('fa120000-0000-0000-0000-202603090000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-09','08:30','09:30','2026-03-09 08:30:00+05:30','2026-03-09 09:29:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-10','08:30','09:30','2026-03-10 08:31:00+05:30','2026-03-10 09:31:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603110000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-11','08:30','09:30','2026-03-11 08:32:00+05:30','2026-03-11 09:33:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-12','08:30','09:30','2026-03-12 08:30:00+05:30','2026-03-12 09:31:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-13','08:30','09:30','2026-03-13 08:33:00+05:30','2026-03-13 09:34:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-14','08:30','09:30','2026-03-14 08:31:00+05:30','2026-03-14 09:32:00+05:30',
+ 'completed',true,NULL),
+-- Mar 15 = Sun, Sunita off
+-- Mar 16 — incomplete (cook had to leave early)
+('fa120000-0000-0000-0000-202603160000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-16','08:30','09:30','2026-03-16 08:33:00+05:30','2026-03-16 09:05:00+05:30',
+ 'incomplete',true,'Cook had a personal emergency and left early; only breakfast prepared, lunch skipped.'),
+('fa120000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-17','08:30','09:30','2026-03-17 08:31:00+05:30','2026-03-17 09:30:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603180000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-18','08:30','09:30','2026-03-18 08:30:00+05:30','2026-03-18 09:30:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-19','08:30','09:30','2026-03-19 08:32:00+05:30','2026-03-19 09:33:00+05:30',
+ 'completed',true,NULL),
+('fa120000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-20','08:30','09:30','2026-03-20 08:30:00+05:30','2026-03-20 09:30:00+05:30',
+ 'completed',true,NULL),
+-- Mar 21 (TODAY) — P1-KCH scheduled (Sunita not yet arrived)
+('fa120000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-21','08:30','09:30',NULL,NULL,'scheduled',false,NULL),
+-- Mar 22 = Sun, Sunita off
+-- Mar 23–28 scheduled
+('fa120000-0000-0000-0000-202603230000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-23','08:30','09:30',NULL,NULL,'scheduled',false,NULL),
+('fa120000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-24','08:30','09:30',NULL,NULL,'scheduled',false,NULL),
+('fa120000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-26','08:30','09:30',NULL,NULL,'scheduled',false,NULL),
+('fa120000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-27','08:30','09:30',NULL,NULL,'scheduled',false,NULL),
+('fa120000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000001','e1000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000002','c0000000-0000-0000-0000-000000000001',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-28','08:30','09:30',NULL,NULL,'scheduled',false,NULL);
+
+
+-- ─── P2: Vikram — HKP (Ravi, 07:45-08:15) + CCR (Deepa, 07:00-07:30) ────
+-- Ravi off sunday: skip 8,15,22 | Deepa off sunday: skip 8,15,22
+-- P2 starts 2026-03-02
+
+INSERT INTO job_allocations (
+  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id, supervisor_id,
+  scheduled_date, scheduled_start_time, scheduled_end_time,
+  actual_start_time, actual_end_time,
+  status, is_locked, supervisor_notes
+) VALUES
+-- === P2-HKP (Ravi, 07:45-08:15) ===
+('fa210000-0000-0000-0000-202603030000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-03','07:45','08:15','2026-03-03 07:46:00+05:30','2026-03-03 08:16:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603040000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-04','07:45','08:15','2026-03-04 07:47:00+05:30','2026-03-04 08:17:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-05','07:45','08:15','2026-03-05 07:45:00+05:30','2026-03-05 08:15:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-06','07:45','08:15','2026-03-06 07:46:00+05:30','2026-03-06 08:16:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-07','07:45','08:15','2026-03-07 07:45:00+05:30','2026-03-07 08:14:00+05:30',
+ 'completed',true,NULL),
+-- Mar 8 = Sun, Ravi off
+-- Mar 9 — completed_delayed (arrived late)
+('fa210000-0000-0000-0000-202603090000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-09','07:45','08:15','2026-03-09 08:10:00+05:30','2026-03-09 08:40:00+05:30',
+ 'completed_delayed',true,'Provider arrived 25 min late; service completed with delay.'),
+('fa210000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-10','07:45','08:15','2026-03-10 07:46:00+05:30','2026-03-10 08:17:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603110000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-11','07:45','08:15','2026-03-11 07:45:00+05:30','2026-03-11 08:15:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-12','07:45','08:15','2026-03-12 07:47:00+05:30','2026-03-12 08:18:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-13','07:45','08:15','2026-03-13 07:46:00+05:30','2026-03-13 08:16:00+05:30',
+ 'completed',true,NULL),
+-- Mar 14 — cancelled_by_customer
+('fa210000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-14','07:45','08:15',NULL,NULL,
+ 'cancelled_by_customer',true,'Customer travelling out of town; requested cancellation.'),
+-- Mar 15 = Sun, Ravi off
+('fa210000-0000-0000-0000-202603160000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-16','07:45','08:15','2026-03-16 07:46:00+05:30','2026-03-16 08:16:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-17','07:45','08:15','2026-03-17 07:45:00+05:30','2026-03-17 08:15:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603180000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-18','07:45','08:15','2026-03-18 07:46:00+05:30','2026-03-18 08:16:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-19','07:45','08:15','2026-03-19 07:45:00+05:30','2026-03-19 08:15:00+05:30',
+ 'completed',true,NULL),
+('fa210000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-20','07:45','08:15','2026-03-20 07:47:00+05:30','2026-03-20 08:18:00+05:30',
+ 'completed',true,NULL),
+-- Mar 21 (TODAY) — P2-HKP scheduled_delayed
+('fa210000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-21','07:45','08:15',NULL,NULL,
+ 'scheduled_delayed',false,'Provider notified 20 min delay; stuck in traffic.'),
+-- Mar 22 = Sun, Ravi off
+-- Mar 23–28 scheduled
+('fa210000-0000-0000-0000-202603230000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-23','07:45','08:15',NULL,NULL,'scheduled',false,NULL),
+('fa210000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-24','07:45','08:15',NULL,NULL,'scheduled',false,NULL),
+('fa210000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-26','07:45','08:15',NULL,NULL,'scheduled',false,NULL),
+('fa210000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-27','07:45','08:15',NULL,NULL,'scheduled',false,NULL),
+('fa210000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-28','07:45','08:15',NULL,NULL,'scheduled',false,NULL),
+
+-- === P2-CCR (Deepa, 07:00-07:30, 2 cars) ===
+('fa220000-0000-0000-0000-202603030000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-03','07:00','07:30','2026-03-03 07:01:00+05:30','2026-03-03 07:31:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603040000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-04','07:00','07:30','2026-03-04 07:02:00+05:30','2026-03-04 07:32:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-05','07:00','07:30','2026-03-05 07:00:00+05:30','2026-03-05 07:29:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-06','07:00','07:30','2026-03-06 07:03:00+05:30','2026-03-06 07:34:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-07','07:00','07:30','2026-03-07 07:01:00+05:30','2026-03-07 07:30:00+05:30',
+ 'completed',true,NULL),
+-- Mar 8 = Sun, Deepa off
+('fa220000-0000-0000-0000-202603090000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-09','07:00','07:30','2026-03-09 07:02:00+05:30','2026-03-09 07:33:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-10','07:00','07:30','2026-03-10 07:01:00+05:30','2026-03-10 07:31:00+05:30',
+ 'completed',true,NULL),
+-- Mar 11 — completed_delayed (car wash ran long)
+('fa220000-0000-0000-0000-202603110000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-11','07:00','07:30','2026-03-11 07:18:00+05:30','2026-03-11 07:55:00+05:30',
+ 'completed_delayed',true,'Provider arrived 18 min late; cars cleaned but service ran over schedule.'),
+('fa220000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-12','07:00','07:30','2026-03-12 07:02:00+05:30','2026-03-12 07:32:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-13','07:00','07:30','2026-03-13 07:01:00+05:30','2026-03-13 07:31:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-14','07:00','07:30','2026-03-14 07:00:00+05:30','2026-03-14 07:30:00+05:30',
+ 'completed',true,NULL),
+-- Mar 15 = Sun, Deepa off
+('fa220000-0000-0000-0000-202603160000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-16','07:00','07:30','2026-03-16 07:01:00+05:30','2026-03-16 07:31:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-17','07:00','07:30','2026-03-17 07:03:00+05:30','2026-03-17 07:33:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603180000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-18','07:00','07:30','2026-03-18 07:00:00+05:30','2026-03-18 07:29:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-19','07:00','07:30','2026-03-19 07:02:00+05:30','2026-03-19 07:32:00+05:30',
+ 'completed',true,NULL),
+('fa220000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-20','07:00','07:30','2026-03-20 07:01:00+05:30','2026-03-20 07:31:00+05:30',
+ 'completed',true,NULL),
+-- Mar 21 (TODAY) — P2-CCR in_progress_delayed (Deepa arrived late)
+('fa220000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-21','07:00','07:30','2026-03-21 07:22:00+05:30',NULL,
+ 'in_progress_delayed',false,'Provider arrived 22 min late; service in progress.'),
+-- Mar 22 = Sun, Deepa off
+-- Mar 23–28 scheduled
+('fa220000-0000-0000-0000-202603230000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-23','07:00','07:30',NULL,NULL,'scheduled',false,NULL),
+('fa220000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-24','07:00','07:30',NULL,NULL,'scheduled',false,NULL),
+('fa220000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-26','07:00','07:30',NULL,NULL,'scheduled',false,NULL),
+('fa220000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-27','07:00','07:30',NULL,NULL,'scheduled',false,NULL),
+('fa220000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000002','e2000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000004','c0000000-0000-0000-0000-000000000002',
+ 'f0000000-0000-0000-0000-000000000007',
+ '2026-03-28','07:00','07:30',NULL,NULL,'scheduled',false,NULL);
+
+
+-- ─── P3: Meera — HKP (Priya, 07:00-07:45) + GCR (Satish, 07:45-08:25) ───
+-- Priya off Wed: skip 4,11,18,25 | Satish off Mon: skip 9,16,23
+-- P3 starts 2026-03-05
+
+INSERT INTO job_allocations (
+  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id, supervisor_id,
+  scheduled_date, scheduled_start_time, scheduled_end_time,
+  actual_start_time, actual_end_time,
+  status, is_locked, supervisor_notes
+) VALUES
+-- === P3-HKP (Priya, 07:00-07:45, off wednesday) ===
+('fa310000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-05','07:00','07:45','2026-03-05 07:01:00+05:30','2026-03-05 07:45:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-06','07:00','07:45','2026-03-06 07:02:00+05:30','2026-03-06 07:47:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-07','07:00','07:45','2026-03-07 07:00:00+05:30','2026-03-07 07:44:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603080000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-08','07:00','07:45','2026-03-08 07:03:00+05:30','2026-03-08 07:48:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603090000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-09','07:00','07:45','2026-03-09 07:01:00+05:30','2026-03-09 07:45:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-10','07:00','07:45','2026-03-10 07:02:00+05:30','2026-03-10 07:46:00+05:30',
+ 'completed',true,NULL),
+-- Mar 11 = Wed, Priya off
+('fa310000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-12','07:00','07:45','2026-03-12 07:00:00+05:30','2026-03-12 07:44:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-13','07:00','07:45','2026-03-13 07:01:00+05:30','2026-03-13 07:45:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-14','07:00','07:45','2026-03-14 07:03:00+05:30','2026-03-14 07:48:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603150000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-15','07:00','07:45','2026-03-15 07:02:00+05:30','2026-03-15 07:46:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603160000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-16','07:00','07:45','2026-03-16 07:00:00+05:30','2026-03-16 07:44:00+05:30',
+ 'completed',true,NULL),
+-- Mar 17 — incomplete (provider left early)
+('fa310000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-17','07:00','07:45','2026-03-17 07:02:00+05:30','2026-03-17 07:25:00+05:30',
+ 'incomplete',true,'Provider left early citing personal emergency; partial cleaning only.'),
+-- Mar 18 = Wed, Priya off
+('fa310000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-19','07:00','07:45','2026-03-19 07:01:00+05:30','2026-03-19 07:45:00+05:30',
+ 'completed',true,NULL),
+('fa310000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-20','07:00','07:45','2026-03-20 07:00:00+05:30','2026-03-20 07:44:00+05:30',
+ 'completed',true,NULL),
+-- Mar 21 (TODAY) — P3-HKP scheduled
+('fa310000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-21','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+-- Mar 22 scheduled (Sun, Priya not off on Sun)
+('fa310000-0000-0000-0000-202603220000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-22','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+-- Mar 23 (Mon) scheduled (Priya not off on Mon)
+('fa310000-0000-0000-0000-202603230000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-23','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+('fa310000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-24','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+-- Mar 25 = Wed, Priya off
+('fa310000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-26','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+('fa310000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-27','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+('fa310000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000003','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-28','07:00','07:45',NULL,NULL,'scheduled',false,NULL),
+
+-- === P3-GCR (Satish, 07:45-08:25, off monday) ===
+('fa320000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-05','07:45','08:25','2026-03-05 07:46:00+05:30','2026-03-05 08:26:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-06','07:45','08:25','2026-03-06 07:47:00+05:30','2026-03-06 08:28:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-07','07:45','08:25','2026-03-07 07:45:00+05:30','2026-03-07 08:24:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603080000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-08','07:45','08:25','2026-03-08 07:46:00+05:30','2026-03-08 08:27:00+05:30',
+ 'completed',true,NULL),
+-- Mar 9 = Mon, Satish off
+('fa320000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-10','07:45','08:25','2026-03-10 07:46:00+05:30','2026-03-10 08:26:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603110000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-11','07:45','08:25','2026-03-11 07:45:00+05:30','2026-03-11 08:25:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-12','07:45','08:25','2026-03-12 07:47:00+05:30','2026-03-12 08:28:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-13','07:45','08:25','2026-03-13 07:45:00+05:30','2026-03-13 08:25:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-14','07:45','08:25','2026-03-14 07:47:00+05:30','2026-03-14 08:28:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603150000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-15','07:45','08:25','2026-03-15 07:46:00+05:30','2026-03-15 08:26:00+05:30',
+ 'completed',true,NULL),
+-- Mar 16 = Mon, Satish off
+-- Mar 17 — completed_delayed
+('fa320000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-17','07:45','08:25','2026-03-17 08:05:00+05:30','2026-03-17 08:48:00+05:30',
+ 'completed_delayed',true,'Provider arrived 20 min late; garden care completed with delay.'),
+('fa320000-0000-0000-0000-202603180000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-18','07:45','08:25','2026-03-18 07:45:00+05:30','2026-03-18 08:25:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-19','07:45','08:25','2026-03-19 07:46:00+05:30','2026-03-19 08:26:00+05:30',
+ 'completed',true,NULL),
+('fa320000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-20','07:45','08:25','2026-03-20 07:45:00+05:30','2026-03-20 08:24:00+05:30',
+ 'completed',true,NULL),
+-- Mar 21 (TODAY) — P3-GCR scheduled
+('fa320000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-21','07:45','08:25',NULL,NULL,'scheduled',false,NULL),
+('fa320000-0000-0000-0000-202603220000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-22','07:45','08:25',NULL,NULL,'scheduled',false,NULL),
+-- Mar 23 = Mon, Satish off
+('fa320000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-24','07:45','08:25',NULL,NULL,'scheduled',false,NULL),
+-- Mar 25 = Wed, Priya off (no HKP) but Satish works - create GCR
+('fa320000-0000-0000-0000-202603250000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-25','07:45','08:25',NULL,NULL,'scheduled',false,NULL),
+('fa320000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-26','07:45','08:25',NULL,NULL,'scheduled',false,NULL),
+('fa320000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-27','07:45','08:25',NULL,NULL,'scheduled',false,NULL),
+('fa320000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000003','e3000000-0000-0000-0002-000000000001',
+ 'a0000000-0000-0000-0000-000000000007','c0000000-0000-0000-0000-000000000003',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-28','07:45','08:25',NULL,NULL,'scheduled',false,NULL);
+
+
+-- ─── P4: Sanjay — HKP (Ramesh, 08:30-09:15, off wednesday) ──────────────
+-- Pause starts 2026-03-18. Mar 18 = Wed (Ramesh off day), so service_on_pause starts Mar 19.
+-- Ramesh off Wed: skip 4,11,18,25
+
+INSERT INTO job_allocations (
+  id, plan_request_id, plan_request_item_id, service_provider_id, customer_id, supervisor_id,
+  scheduled_date, scheduled_start_time, scheduled_end_time,
+  actual_start_time, actual_end_time,
+  status, is_locked, supervisor_notes
+) VALUES
+-- === P4-HKP (Ramesh, 08:30-09:15) ===
+('fa410000-0000-0000-0000-202603030000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-03','08:30','09:15','2026-03-03 08:31:00+05:30','2026-03-03 09:16:00+05:30',
+ 'completed',true,NULL),
+-- Mar 4 = Wed, Ramesh off
+('fa410000-0000-0000-0000-202603050000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-05','08:30','09:15','2026-03-05 08:30:00+05:30','2026-03-05 09:14:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603060000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-06','08:30','09:15','2026-03-06 08:32:00+05:30','2026-03-06 09:17:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603070000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-07','08:30','09:15','2026-03-07 08:31:00+05:30','2026-03-07 09:15:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603080000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-08','08:30','09:15','2026-03-08 08:30:00+05:30','2026-03-08 09:14:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603090000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-09','08:30','09:15','2026-03-09 08:33:00+05:30','2026-03-09 09:18:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603100000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-10','08:30','09:15','2026-03-10 08:31:00+05:30','2026-03-10 09:16:00+05:30',
+ 'completed',true,NULL),
+-- Mar 11 = Wed, Ramesh off
+('fa410000-0000-0000-0000-202603120000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-12','08:30','09:15','2026-03-12 08:30:00+05:30','2026-03-12 09:14:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603130000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-13','08:30','09:15','2026-03-13 08:32:00+05:30','2026-03-13 09:17:00+05:30',
+ 'completed',true,NULL),
+-- Mar 14 — completed_delayed
+('fa410000-0000-0000-0000-202603140000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-14','08:30','09:15','2026-03-14 08:52:00+05:30','2026-03-14 09:38:00+05:30',
+ 'completed_delayed',true,'Provider arrived 22 min late. Service completed with delay.'),
+('fa410000-0000-0000-0000-202603150000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-15','08:30','09:15','2026-03-15 08:31:00+05:30','2026-03-15 09:16:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603160000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-16','08:30','09:15','2026-03-16 08:30:00+05:30','2026-03-16 09:14:00+05:30',
+ 'completed',true,NULL),
+('fa410000-0000-0000-0000-202603170000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-17','08:30','09:15','2026-03-17 08:32:00+05:30','2026-03-17 09:17:00+05:30',
+ 'completed',true,NULL),
+-- Mar 18 = Wed, Ramesh off (also pause starts today)
+-- Mar 19 onwards = service_on_pause
+('fa410000-0000-0000-0000-202603190000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-19','08:30','09:15',NULL,NULL,
+ 'service_on_pause',false,'Plan paused 18 Mar – 28 Mar per customer vacation request.'),
+('fa410000-0000-0000-0000-202603200000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-20','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+('fa410000-0000-0000-0000-202603210000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-21','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+('fa410000-0000-0000-0000-202603220000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-22','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+('fa410000-0000-0000-0000-202603230000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-23','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+('fa410000-0000-0000-0000-202603240000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-24','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+-- Mar 25 = Wed, Ramesh off (skip)
+('fa410000-0000-0000-0000-202603260000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-26','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+('fa410000-0000-0000-0000-202603270000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-27','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL),
+('fa410000-0000-0000-0000-202603280000',
+ 'b0000000-0000-0000-0000-000000000004','e4000000-0000-0000-0001-000000000001',
+ 'a0000000-0000-0000-0000-000000000008','c0000000-0000-0000-0000-000000000004',
+ 'f0000000-0000-0000-0000-000000000008',
+ '2026-03-28','08:30','09:15',NULL,NULL,'service_on_pause',false,NULL);
+
+
+-- ── 18. Provider Leave Requests ───────────────────────────────────────────
+
+INSERT INTO provider_leave_requests (id, service_provider_id, leave_start_date, leave_end_date, leave_type, status) VALUES
+  -- L1: Ravi Kumar, approved leave
+  ('ea000000-0000-0000-0000-000000000001',
+   'a0000000-0000-0000-0000-000000000001',
+   '2026-03-28', '2026-03-30', 'personal', 'approved'),
+  -- L2: Priya Nair, pending sick leave
+  ('ea000000-0000-0000-0000-000000000002',
+   'a0000000-0000-0000-0000-000000000003',
+   '2026-03-25', '2026-03-26', 'sick', 'pending');
+
+
+-- ── 19. Pause Requests ────────────────────────────────────────────────────
+
+INSERT INTO pause_requests (id, customer_id, plan_request_id, pause_type, pause_start_date, pause_end_date, status, created_at, updated_at) VALUES
+  -- PR1: C4 Sanjay (P4) vacation pause — active (supervisor approved)
+  ('eb000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-000000000004',
+   'b0000000-0000-0000-0000-000000000004',
+   'vacation', '2026-03-18', '2026-03-28', 'active',
+   '2026-03-15 10:00:00+05:30', '2026-03-18 08:00:00+05:30'),
+  -- PR2: C1 Ananya (P1) short break — pending (just submitted)
+  ('eb000000-0000-0000-0000-000000000002',
+   'c0000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000001',
+   'short_break', '2026-03-24', '2026-03-24', 'pending',
+   '2026-03-21 10:00:00+05:30', '2026-03-21 10:00:00+05:30');
+
+
+-- ── 20. On-Demand Requests ────────────────────────────────────────────────
+
+INSERT INTO on_demand_requests (id, customer_id, plan_request_id, job_id, request_date, status, service_provider_id, customer_notes, created_at) VALUES
+  -- OD1: Ananya — Electrician visit, pending
+  ('ec000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000001',
+   '55000000-0000-0000-0000-000000000001',
+   '2026-03-22', 'pending', NULL,
+   'Switch in bedroom not working',
+   '2026-03-21 09:30:00+05:30'),
+  -- OD2: Vikram — AC Service, allocated to Arjun
+  ('ec000000-0000-0000-0000-000000000002',
+   'c0000000-0000-0000-0000-000000000002',
+   'b0000000-0000-0000-0000-000000000002',
+   '55000000-0000-0000-0000-000000000005',
+   '2026-03-23', 'allocated',
+   'a0000000-0000-0000-0000-000000000009',
+   NULL,
+   '2026-03-21 11:00:00+05:30');
+
+
+-- ── 21. Issue Tickets ─────────────────────────────────────────────────────
+
+INSERT INTO issue_tickets (id, customer_id, plan_request_id, title, description, status, priority, supervisor_response, created_at, updated_at) VALUES
+  -- IT1: Ananya — cook arrived late on Mar 16, resolved
+  ('ed000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000001',
+   'Cook arrived late on Mar 16',
+   'The cook arrived more than 30 minutes late on March 16 without prior notice. Please ensure this does not recur.',
+   'resolved', 'medium',
+   'Apologized to customer; cook counselled. Will not recur.',
+   '2026-03-16 20:00:00+05:30', '2026-03-17 10:00:00+05:30'),
+  -- IT2: Vikram — car wash missed on Mar 16, open
+  ('ed000000-0000-0000-0000-000000000002',
+   'c0000000-0000-0000-0000-000000000002',
+   'b0000000-0000-0000-0000-000000000002',
+   'Car wash missed on Mar 16',
+   'Deepa did not show up for car wash on March 16. Both cars were dirty and I had to leave for an important meeting.',
+   'open', 'high', NULL,
+   '2026-03-16 19:00:00+05:30', '2026-03-16 19:00:00+05:30'),
+  -- IT3: Meera — plants not watered, in_progress
+  ('ed000000-0000-0000-0000-000000000003',
+   'c0000000-0000-0000-0000-000000000003',
+   'b0000000-0000-0000-0000-000000000003',
+   'Plants not watered properly on Mar 18',
+   'Satish watered only about half the plants on March 18. Several plants are showing signs of dehydration.',
+   'in_progress', 'medium', NULL,
+   '2026-03-18 21:00:00+05:30', '2026-03-19 09:30:00+05:30');
+
+
+-- ── 22. Issue Comments ────────────────────────────────────────────────────
+
+INSERT INTO issue_comments (id, issue_ticket_id, commenter_id, commenter_type, comment_text, created_at) VALUES
+  -- IT1: Ananya raised it (customer)
+  ('ee000000-0000-0000-0000-000000000001',
+   'ed000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-000000000001', 'customer',
+   'Cook arrived 35 minutes late today (Mar 16). This is the second time this month. Please address this urgently.',
+   '2026-03-16 20:00:00+05:30'),
+  -- IT1: Amit (supervisor) responded
+  ('ee000000-0000-0000-0000-000000000002',
+   'ed000000-0000-0000-0000-000000000001',
+   'f0000000-0000-0000-0000-000000000007', 'supervisor',
+   'Hi Ananya, I have spoken with Sunita about this. She has been counselled and assured it will not happen again. Sorry for the inconvenience.',
+   '2026-03-17 10:00:00+05:30'),
+  -- IT2: Vikram raised it (customer)
+  ('ee000000-0000-0000-0000-000000000003',
+   'ed000000-0000-0000-0000-000000000002',
+   'c0000000-0000-0000-0000-000000000002', 'customer',
+   'Deepa did not show up on March 16. I had an important meeting and both cars were dirty. This is unacceptable.',
+   '2026-03-16 19:00:00+05:30'),
+  -- IT3: Sneha (supervisor) acknowledged
+  ('ee000000-0000-0000-0000-000000000004',
+   'ed000000-0000-0000-0000-000000000003',
+   'f0000000-0000-0000-0000-000000000008', 'supervisor',
+   'Hi Meera, I am looking into this. I will speak to Satish and ensure all 20 plants are watered properly from tomorrow.',
+   '2026-03-19 09:30:00+05:30');
+
+
+-- ── 23. Tech Services Allowance ───────────────────────────────────────────
+-- month_year stored as 'YYYY-MM'
+
+INSERT INTO tech_services_allowance (plan_request_id, service_type, month_year, allowed_count, used_count) VALUES
+  -- P1: electrician allowance (OD1 is pending, will consume 1 when done)
+  ('b0000000-0000-0000-0000-000000000001', 'electrician', '2026-03', 2, 1),
+  -- P2: ac_service allowance (OD2 allocated)
+  ('b0000000-0000-0000-0000-000000000002', 'ac_service',  '2026-03', 2, 1);
+
+-- ── END OF SEED ───────────────────────────────────────────────────────────
+
