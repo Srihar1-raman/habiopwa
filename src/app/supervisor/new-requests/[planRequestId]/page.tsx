@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ChevronLeft, CheckCircle, Minus, Plus, Clock, AlertTriangle, CheckCheck, Moon } from "lucide-react";
+import { ChevronLeft, CheckCircle, Minus, Plus, Clock, AlertTriangle, CheckCheck, Moon, Search, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   calcJobPrices,
@@ -10,7 +10,7 @@ import {
   formatUnitValue,
   type JobPricingParams,
 } from "@/lib/pricing";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, defaultPlusDate } from "@/lib/utils";
 
 interface PlanItem {
   id: string;
@@ -59,6 +59,27 @@ interface Provider {
   id: string;
   name: string;
   provider_type: string | null;
+}
+
+interface ServiceJob {
+  id: string;
+  name: string;
+  code: string | null;
+  category_id: string;
+  slug: string;
+  frequency_label: string;
+  unit_type: string;
+  default_unit: number;
+  min_unit: number;
+  max_unit: number;
+  unit_interval: number;
+  formula_type: string;
+  base_rate_per_unit: number;
+  instances_per_month: number;
+  discount_pct: number;
+  time_multiple: number | null;
+  service_categories: { id: string; slug: string; name: string } | null;
+  category_name: string | null;
 }
 
 interface ProviderAvailability {
@@ -134,6 +155,85 @@ function guessProviderTypeFromItem(item: PlanItem): string | null {
   return null;
 }
 
+// ── Service Catalog Modal ─────────────────────────────────────────────────────
+
+function ServiceCatalogModal({
+  onClose,
+  onSelect,
+}: {
+  onClose: () => void;
+  onSelect: (job: ServiceJob) => void;
+}) {
+  const [jobs, setJobs] = useState<ServiceJob[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/supervisor/service-catalog")
+      .then((r) => r.json())
+      .then((d) => setJobs(d.jobs ?? []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = jobs.filter(
+    (j) =>
+      j.name.toLowerCase().includes(search.toLowerCase()) ||
+      (j.category_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (j.code ?? "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="text-base font-semibold text-gray-900">Add Service</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search services…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+            />
+          </div>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-4 border-[#004aad] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-8">No services found</p>
+          ) : (
+            <ul>
+              {filtered.map((job) => (
+                <li key={job.id}>
+                  <button
+                    onClick={() => onSelect(job)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-50 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-gray-800">{job.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {job.category_name ?? "—"} {job.code ? `· ${job.code}` : ""}
+                      {" · "}{job.frequency_label}
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Allocation item card ──────────────────────────────────────────────────────
 
 function AllocationCard({
@@ -144,6 +244,7 @@ function AllocationCard({
   availLoading,
   onChange,
   onFetchAvailability,
+  onDelete,
 }: {
   item: PlanItem;
   alloc: AllocationRow;
@@ -152,6 +253,7 @@ function AllocationCard({
   availLoading: boolean;
   onChange: (field: keyof AllocationRow, value: string | number) => void;
   onFetchAvailability: (date: string, start: string, end: string) => void;
+  onDelete?: () => void;
 }) {
   const minUnit = item.service_jobs?.min_unit ?? (item.unit_type === "min" ? 15 : 1);
   const maxUnit = item.service_jobs?.max_unit ?? (item.unit_type === "min" ? 480 : 20);
@@ -224,22 +326,34 @@ function AllocationCard({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
-      {/* Title + price */}
+      {/* Title + price + delete */}
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex-1">
           <p className="font-semibold text-gray-900 text-sm">{item.title}</p>
           <p className="text-xs text-gray-400">{item.frequency_label}</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-bold text-[#004aad]">
-            {formatCurrency(effective)}
-            <span className="text-xs font-normal text-gray-400">/m</span>
-          </p>
-          {base !== effective && (
-            <p className="text-xs text-gray-400 line-through">{formatCurrency(base)}</p>
-          )}
-          {discountPct > 0 && base !== effective && (
-            <p className="text-xs text-green-600">{Math.round(discountPct * 100)}% off</p>
+        <div className="flex items-start gap-2">
+          <div className="text-right">
+            <p className="text-sm font-bold text-[#004aad]">
+              {formatCurrency(effective)}
+              <span className="text-xs font-normal text-gray-400">/m</span>
+            </p>
+            {base !== effective && (
+              <p className="text-xs text-gray-400 line-through">{formatCurrency(base)}</p>
+            )}
+            {discountPct > 0 && base !== effective && (
+              <p className="text-xs text-green-600">{Math.round(discountPct * 100)}% off</p>
+            )}
+          </div>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="text-gray-300 hover:text-red-500 transition-colors mt-0.5"
+              title="Remove service"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
@@ -510,6 +624,8 @@ export default function NewRequestAllocatePage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [showCatalog, setShowCatalog] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -531,7 +647,7 @@ export default function NewRequestAllocatePage() {
           plan_request_item_id: item.id,
           service_provider_id: "",
           backup_provider_id: "",
-          scheduled_date: "",
+          scheduled_date: defaultPlusDate(3),
           scheduled_start_time: item.preferred_start_time ?? "",
           scheduled_end_time: item.preferred_start_time
             ? addMinutesToTime(
@@ -580,6 +696,135 @@ export default function NewRequestAllocatePage() {
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
+  }
+
+  async function handleAddService(job: ServiceJob) {
+    if (!request) return;
+    setCatalogLoading(true);
+    setError("");
+    try {
+      const categoryId = job.service_categories?.id ?? job.category_id;
+      if (!categoryId) {
+        setError("Service is missing a category — cannot add.");
+        return;
+      }
+
+      const { base, effective } = calcJobPrices(job.default_unit, {
+        formula_type: job.formula_type,
+        unit_type: job.unit_type,
+        base_rate_per_unit: job.base_rate_per_unit,
+        instances_per_month: job.instances_per_month,
+        discount_pct: job.discount_pct,
+        time_multiple: job.time_multiple,
+      });
+
+      const itemPayload = {
+        category_id: categoryId,
+        job_id: job.id,
+        job_code: job.code,
+        title: job.name,
+        frequency_label: job.frequency_label,
+        unit_type: job.unit_type,
+        unit_value: job.default_unit,
+        minutes:
+          job.unit_type === "min"
+            ? job.default_unit
+            : job.time_multiple
+            ? Math.round(job.default_unit * job.time_multiple)
+            : job.default_unit,
+        base_rate_per_unit: job.base_rate_per_unit,
+        instances_per_month: job.instances_per_month,
+        discount_pct: job.discount_pct,
+        time_multiple: job.time_multiple,
+        formula_type: job.formula_type,
+        base_price_monthly: base,
+        price_monthly: effective,
+        mrp_monthly: base,
+      };
+
+      const res = await fetch(
+        `/api/supervisor/requests/${planRequestId}/items`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(itemPayload),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to add service");
+        return;
+      }
+
+      // Re-fetch request to get updated items
+      const reqRes = await fetch(
+        `/api/supervisor/requests/${planRequestId}`
+      ).then((r) => r.json());
+      const updatedReq: RequestDetail = reqRes.request;
+      setRequest(updatedReq);
+
+      // Add allocation row for the new item
+      const newItem: PlanItem = data.item;
+      setAllocations((prev) => [
+        ...prev,
+        {
+          plan_request_item_id: newItem.id,
+          service_provider_id: "",
+          backup_provider_id: "",
+          scheduled_date: defaultPlusDate(3),
+          scheduled_start_time: newItem.preferred_start_time ?? "",
+          scheduled_end_time: newItem.preferred_start_time
+            ? addMinutesToTime(
+                newItem.preferred_start_time,
+                computeMinutes(
+                  newItem.unit_type,
+                  newItem.unit_value,
+                  newItem.time_multiple != null
+                    ? Number(newItem.time_multiple)
+                    : null
+                )
+              )
+            : "",
+          unit_value: newItem.unit_value,
+        },
+      ]);
+
+      setShowCatalog(false);
+    } catch {
+      setError("Failed to add service");
+    } finally {
+      setCatalogLoading(false);
+    }
+  }
+
+  async function handleDeleteItem(itemId: string, allocIdx: number) {
+    if (!confirm("Remove this service?")) return;
+    setError("");
+    try {
+      const res = await fetch(
+        `/api/supervisor/requests/${planRequestId}/items?itemId=${itemId}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.error ?? "Failed to delete item");
+        return;
+      }
+      // Update local state
+      setRequest((prev) =>
+        prev
+          ? {
+              ...prev,
+              plan_request_items: prev.plan_request_items.filter(
+                (i) => i.id !== itemId
+              ),
+            }
+          : prev
+      );
+      setAllocations((prev) => prev.filter((_, i) => i !== allocIdx));
+    } catch {
+      setError("Failed to delete item");
+    }
   }
 
   async function handleAllocate() {
@@ -675,7 +920,7 @@ export default function NewRequestAllocatePage() {
       </div>
 
       <div className="px-4 mt-3 flex flex-col gap-4">
-        {/* Customer Info */}
+        {/* Customer Info + live total */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
             Customer
@@ -698,7 +943,47 @@ export default function NewRequestAllocatePage() {
                 .join(", ")}
             </p>
           )}
+          {/* Live total price */}
+          {itemsToAllocate.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-xs text-gray-500 font-medium">Estimated Total</span>
+              <span className="text-sm font-bold text-[#004aad]">
+                {formatCurrency(
+                  itemsToAllocate.reduce((s, item) => {
+                    const allocIdx = allocations.findIndex(
+                      (a) => a.plan_request_item_id === item.id
+                    );
+                    const uv =
+                      allocIdx >= 0
+                        ? allocations[allocIdx].unit_value
+                        : item.unit_value;
+                    const { effective } = computePlanItemPrices(item, uv);
+                    return s + effective;
+                  }, 0)
+                )}{" "}
+                <span className="text-xs font-normal text-gray-400">/ month</span>
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* Services header + add button */}
+        {!success && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-700">
+              Services ({itemsToAllocate.length})
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCatalog(true)}
+              disabled={catalogLoading}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#004aad] text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Service
+            </button>
+          </div>
+        )}
 
         {/* Allocation forms */}
         {success ? (
@@ -714,18 +999,18 @@ export default function NewRequestAllocatePage() {
           </div>
         ) : itemsToAllocate.length === 0 ? (
           <div className="py-10 text-center text-gray-400 text-sm">
-            No pending items to allocate.
+            No services added yet — click &quot;Add Service&quot; to begin.
           </div>
         ) : (
           itemsToAllocate.map((item, idx) => (
             <AllocationCard
               key={item.id}
               item={item}
-              alloc={allocations[idx] ?? {
+              alloc={allocations.find((a) => a.plan_request_item_id === item.id) ?? {
                 plan_request_item_id: item.id,
                 service_provider_id: "",
                 backup_provider_id: "",
-                scheduled_date: "",
+                scheduled_date: defaultPlusDate(3),
                 scheduled_start_time: "",
                 scheduled_end_time: "",
                 unit_value: item.unit_value,
@@ -735,6 +1020,7 @@ export default function NewRequestAllocatePage() {
               availLoading={availLoading}
               onChange={(field, value) => updateAllocation(idx, field, value)}
               onFetchAvailability={fetchAvailability}
+              onDelete={() => handleDeleteItem(item.id, idx)}
             />
           ))
         )}
@@ -757,6 +1043,13 @@ export default function NewRequestAllocatePage() {
             Allocate All
           </Button>
         </div>
+      )}
+
+      {showCatalog && (
+        <ServiceCatalogModal
+          onClose={() => setShowCatalog(false)}
+          onSelect={handleAddService}
+        />
       )}
     </div>
   );

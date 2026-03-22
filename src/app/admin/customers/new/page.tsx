@@ -87,12 +87,20 @@ export default function NewCustomerPage() {
       return;
     }
     setLoading(true);
-    // Check if customer already exists before showing OTP
-    const res = await fetch(`/api/admin/customers`);
+    // Check if phone already exists in the system
+    const res = await fetch(`/api/admin/phone-check?phone=${phone}`);
     const data = await res.json();
     setLoading(false);
-    if (data.customers?.some((c: { phone: string }) => c.phone === phone)) {
-      setError("Customer already exists");
+    if (data.error) {
+      setError("Could not verify phone. Please try again.");
+      return;
+    }
+    if (data.exists) {
+      setError(
+        data.in === "customer"
+          ? "A customer with this phone number already exists."
+          : `This phone is already registered as a ${data.in}.`
+      );
       return;
     }
     setOtpSent(true);

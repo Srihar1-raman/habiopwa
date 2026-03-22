@@ -10,7 +10,7 @@ import {
   formatUnitValue,
   type JobPricingParams,
 } from "@/lib/pricing";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, defaultPlusDate } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -332,7 +332,6 @@ function EditableItemCard({
   onUpdate: (id: string, updates: Record<string, unknown>) => Promise<void>;
   onDelete: (id: string) => void;
 }) {
-  const [title, setTitle] = useState(item.title);
   const [unitValue, setUnitValue] = useState(item.unit_value);
   const [startTime, setStartTime] = useState(item.preferred_start_time ?? "");
   const [providerId, setProviderId] = useState(item.preferred_provider_id ?? "");
@@ -342,7 +341,7 @@ function EditableItemCard({
   const [saving, setSaving] = useState<string | null>(null);
   const [availability, setAvailability] = useState<ProviderAvailability[]>([]);
   const [availLoading, setAvailLoading] = useState(false);
-  const [availDate, setAvailDate] = useState(""); // date chosen for this item's allocation
+  const [availDate, setAvailDate] = useState(() => defaultPlusDate(3)); // date chosen for this item's allocation
 
   const minUnit = item.service_jobs?.min_unit ?? (item.unit_type === "min" ? 15 : 1);
   const maxUnit = item.service_jobs?.max_unit ?? (item.unit_type === "min" ? 480 : 20);
@@ -436,12 +435,7 @@ function EditableItemCard({
       {/* Header */}
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => title !== item.title && save({ title })}
-            className="w-full font-medium text-sm text-gray-900 border-b border-transparent hover:border-gray-300 focus:border-[#004aad] bg-transparent focus:outline-none pb-0.5"
-          />
+          <p className="font-medium text-sm text-gray-900 pb-0.5">{item.title}</p>
           <p className="text-xs text-gray-400 mt-0.5">
             {item.service_categories?.name ?? "—"} · {item.frequency_label}
           </p>

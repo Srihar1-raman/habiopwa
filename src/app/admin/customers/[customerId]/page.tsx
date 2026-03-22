@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, UserCheck, RefreshCw, Plus } from "lucide-react";
+import { ArrowLeft, UserCheck, RefreshCw, Plus, UserCog } from "lucide-react";
 
 interface CustomerProfile {
   flat_no: string | null;
@@ -21,6 +21,8 @@ interface Customer {
   id: string;
   phone: string;
   name: string;
+  default_supervisor_id: string | null;
+  default_supervisor?: { id: string; name: string; phone: string } | null;
   customer_profiles: CustomerProfile[] | CustomerProfile | null;
 }
 
@@ -35,6 +37,7 @@ interface PlanRequest {
   created_at: string;
   is_recurring: boolean;
   assigned_supervisor_id: string | null;
+  assigned_supervisor?: { id: string; name: string; phone: string } | null;
 }
 
 interface IssueTicket {
@@ -193,6 +196,10 @@ export default function CustomerDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [allocateModal, setAllocateModal] = useState<PlanRequest | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
+  // Customer-level supervisor assignment
+  const [selectedDefaultSv, setSelectedDefaultSv] = useState("");
+  const [savingDefaultSv, setSavingDefaultSv] = useState(false);
+  const [svError, setSvError] = useState<string | null>(null);
 
   async function handleCreatePlan() {
     if (creatingPlan) return;
@@ -226,15 +233,30 @@ export default function CustomerDetailPage() {
           setCustomer(data.customer);
           setPlanRequests(data.planRequests ?? []);
           setIssueTickets(data.issueTickets ?? []);
+          setSelectedDefaultSv(data.customer?.default_supervisor_id ?? "");
         }
       })
       .catch(() => setError("Failed to load customer"))
       .finally(() => setLoading(false));
   }
 
+  async function handleSaveDefaultSupervisor() {
+    setSavingDefaultSv(true);
+    setSvError(null);
+    const res = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ default_supervisor_id: selectedDefaultSv || null }),
+    });
+    const data = await res.json();
+    setSavingDefaultSv(false);
+    if (data.error) setSvError(data.error);
+    else loadData();
+  }
+
   useEffect(() => {
     loadData();
-    // Load active supervisors for the allocation modal
+    // Load active supervisors for the allocation modal and supervisor assignment
     fetch("/api/admin/staff?role=supervisor&status=active")
       .then((r) => r.json())
       .then((data) => setSupervisors(data.staff ?? []))
@@ -330,6 +352,49 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
+      {/* ── Supervisor Assignment (PRIMARY STEP) ─────────────────────── */}
+      <div className={`bg-white rounded-xl shadow-sm p-5 border-l-4 ${customer.default_supervisor_id ? "border-green-400" : "border-amber-400"}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <UserCog size={16} className={customer.default_supervisor_id ? "text-green-600" : "text-amber-600"} />
+          <h2 className="font-semibold text-gray-900">Assigned Supervisor</h2>
+          {!customer.default_supervisor_id && (
+            <span className="ml-1 text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+              Required — assign before creating plans
+            </span>
+          )}
+        </div>
+
+        {customer.default_supervisor && (
+          <div className="mb-3 text-sm text-gray-700">
+            <p className="font-medium">{customer.default_supervisor.name}</p>
+            <p className="text-gray-500">{customer.default_supervisor.phone}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2 items-center">
+          <select
+            value={selectedDefaultSv}
+            onChange={(e) => setSelectedDefaultSv(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]"
+          >
+            <option value="">— Choose supervisor —</option>
+            {supervisors.map((sv) => (
+              <option key={sv.id} value={sv.id}>
+                {sv.name} ({sv.phone})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSaveDefaultSupervisor}
+            disabled={savingDefaultSv || selectedDefaultSv === (customer.default_supervisor_id ?? "")}
+            className="px-4 py-2 bg-[#004aad] text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            {savingDefaultSv ? "Saving…" : customer.default_supervisor_id ? "Reassign" : "Assign"}
+          </button>
+        </div>
+        {svError && <p className="text-xs text-red-600 mt-2">{svError}</p>}
+      </div>
+
       {/* Plan Requests */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -338,7 +403,8 @@ export default function CustomerDetailPage() {
           </h2>
           <button
             onClick={handleCreatePlan}
-            disabled={creatingPlan}
+            disabled={creatingPlan || !customer.default_supervisor_id}
+            title={!customer.default_supervisor_id ? "Assign a supervisor first" : undefined}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-[#004aad] text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={14} />

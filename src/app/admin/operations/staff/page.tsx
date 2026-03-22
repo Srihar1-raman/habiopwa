@@ -32,6 +32,7 @@ interface StaffMember {
   name: string;
   role: string;
   status: string;
+  location_id: string | null;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -271,12 +272,25 @@ export default function StaffManagementPage() {
     }
   }
 
-  function sendOtp() {
+  async function sendOtp() {
     if (!modal.phone || modal.phone.length < 10) {
       setModalError("Enter a valid 10-digit phone number");
       return;
     }
     setModalError(null);
+
+    // Check if phone already exists (staff or provider)
+    const res = await fetch(`/api/admin/phone-check?phone=${modal.phone}`);
+    const data = await res.json();
+    if (data.exists) {
+      setModalError(
+        data.in === "customer"
+          ? "This phone is registered as a customer — cannot use for staff/provider."
+          : `A ${data.in} with this phone already exists.`
+      );
+      return;
+    }
+
     setModal((m) => ({ ...m, otpSent: true, otpDigits: ["", "", "", ""] }));
   }
 
@@ -645,6 +659,27 @@ export default function StaffManagementPage() {
       case 4:
         return (
           <div className="space-y-3">
+            <Field label="Assign Supervisor">
+              <select
+                value={modal.supervisorId}
+                onChange={(e) => {
+                  const svId = e.target.value;
+                  // Auto-fill location from the selected supervisor
+                  const sv = supervisors.find((s) => s.id === svId);
+                  setModal((m) => ({
+                    ...m,
+                    supervisorId: svId,
+                    locationId: sv?.location_id ?? m.locationId,
+                  }));
+                }}
+                className={selectCls}
+              >
+                <option value="">— None —</option>
+                {supervisors.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </Field>
             <Field label="Location">
               <select
                 value={modal.locationId}
@@ -656,18 +691,9 @@ export default function StaffManagementPage() {
                   <option key={l.id} value={l.id}>{l.name}, {l.city}</option>
                 ))}
               </select>
-            </Field>
-            <Field label="Assign Supervisor">
-              <select
-                value={modal.supervisorId}
-                onChange={(e) => setModal((m) => ({ ...m, supervisorId: e.target.value }))}
-                className={selectCls}
-              >
-                <option value="">— None —</option>
-                {supervisors.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              {modal.supervisorId && modal.locationId && (
+                <p className="text-xs text-gray-400 mt-1">Auto-filled from supervisor&apos;s location</p>
+              )}
             </Field>
           </div>
         );
