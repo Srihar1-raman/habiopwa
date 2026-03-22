@@ -9,13 +9,21 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Fetch all staff for name lookups (used for reports_to names)
+    const { data: allStaffNames } = await supabaseAdmin
+      .from("staff_accounts")
+      .select("id, name");
+
+    const staffNameMap = new Map(
+      (allStaffNames ?? []).map((s) => [s.id, s.name as string])
+    );
+
     const [staffResult, providerResult] = await Promise.all([
       supabaseAdmin
         .from("staff_accounts")
         .select(
-          `id, phone, name, email, role, status, location_id,
-           locations(id, name, city),
-           manager:staff_accounts!staff_accounts_reports_to_fkey(id, name)`
+          `id, phone, name, email, role, status, location_id, reports_to,
+           locations(id, name, city)`
         )
         .neq("role", "admin")
         .order("name"),
@@ -38,7 +46,6 @@ export async function GET() {
 
     const staffPersonnel = (staffResult.data ?? []).map((row) => {
       const location = Array.isArray(row.locations) ? row.locations[0] : row.locations;
-      const manager = Array.isArray(row.manager) ? row.manager[0] : row.manager;
       return {
         person_type: "staff" as const,
         id: row.id,
@@ -49,7 +56,7 @@ export async function GET() {
         status: row.status,
         location_id: row.location_id,
         location_name: (location as { name: string } | null)?.name ?? null,
-        reports_to_name: (manager as { name: string } | null)?.name ?? null,
+        reports_to_name: row.reports_to ? (staffNameMap.get(row.reports_to) ?? null) : null,
         provider_type: null,
         supervisor_name: null,
       };

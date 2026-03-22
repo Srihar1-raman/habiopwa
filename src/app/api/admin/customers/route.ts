@@ -152,9 +152,21 @@ export async function GET(req: NextRequest) {
     // Apply plan_status filter if provided
     if (planStatusFilter) {
       if (planStatusFilter === "no_plan") {
-        result = result.filter((c) => !c.latest_plan_status);
+        result = result.filter((c) => !c.latest_plan_status && !c.cart_id);
       } else if (planStatusFilter === "has_cart") {
-        result = result.filter((c) => !c.latest_plan_status && c.cart_id);
+        // "Has Cart (Not Submitted)": customers with cart_in_progress plan OR old-style carts with no plan
+        result = result.filter(
+          (c) =>
+            c.latest_plan_status === "cart_in_progress" ||
+            (!c.latest_plan_status && c.cart_id)
+        );
+      } else if (planStatusFilter === "submitted") {
+        // "submitted" and "captain_allocation_pending" are treated as the same stage
+        result = result.filter(
+          (c) =>
+            c.latest_plan_status === "submitted" ||
+            c.latest_plan_status === "captain_allocation_pending"
+        );
       } else {
         result = result.filter((c) => c.latest_plan_status === planStatusFilter);
       }

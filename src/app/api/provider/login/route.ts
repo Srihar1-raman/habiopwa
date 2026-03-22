@@ -23,10 +23,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Provider not found" }, { status: 404 });
   }
 
-  const digits = provider.phone.replace(/\D/g, "");
-  const expectedOtp = digits.slice(-4);
-
-  if (otp !== expectedOtp) {
+  // MVP: hardcoded OTP "1234" for all providers
+  if (otp !== "1234") {
     return NextResponse.json({ ok: false, error: "Invalid OTP" }, { status: 401 });
   }
 

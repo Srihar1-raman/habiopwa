@@ -19,8 +19,7 @@ export async function GET(
       .select(
         `id, phone, name, email, role, status, location_id, reports_to,
          aadhaar, address, permanent_address,
-         locations(id, name, city),
-         manager:staff_accounts!staff_accounts_reports_to_fkey(id, name)`
+         locations(id, name, city)`
       )
       .eq("id", staffId)
       .single();
@@ -32,12 +31,20 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    // Fetch reports_to name separately to avoid self-join schema cache issues
+    let reports_to_name: string | null = null;
+    if (data.reports_to) {
+      const { data: managerData } = await supabaseAdmin
+        .from("staff_accounts")
+        .select("id, name")
+        .eq("id", data.reports_to)
+        .single();
+      reports_to_name = managerData?.name ?? null;
+    }
+
     const location = Array.isArray(data.locations)
       ? data.locations[0]
       : data.locations;
-    const manager = Array.isArray(data.manager)
-      ? data.manager[0]
-      : data.manager;
 
     return NextResponse.json({
       staff: {
@@ -54,7 +61,7 @@ export async function GET(
         permanent_address: data.permanent_address,
         location_name: location?.name ?? null,
         location_city: location?.city ?? null,
-        reports_to_name: (manager as { id: string; name: string } | null)?.name ?? null,
+        reports_to_name: reports_to_name,
       },
     });
   } catch (err) {
