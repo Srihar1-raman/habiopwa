@@ -6,11 +6,17 @@ import { ChevronLeft, ChevronRight, Calendar, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const STATUS_COLORS: Record<string, string> = {
+  scheduled: "bg-blue-100 text-blue-600",
+  scheduled_delayed: "bg-orange-100 text-orange-600",
+  in_progress: "bg-blue-100 text-blue-700",
+  in_progress_delayed: "bg-orange-100 text-orange-700",
   completed: "bg-green-100 text-green-700",
-  pending: "bg-gray-100 text-gray-600",
-  in_progress: "bg-blue-100 text-blue-600",
+  completed_delayed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-red-100 text-red-700",
-  delayed: "bg-orange-100 text-orange-600",
+  cancelled_by_customer: "bg-red-100 text-red-600",
+  service_on_pause: "bg-yellow-100 text-yellow-700",
+  incomplete: "bg-red-200 text-red-800",
+  status_not_marked: "bg-gray-100 text-gray-600",
 };
 
 interface Allocation {

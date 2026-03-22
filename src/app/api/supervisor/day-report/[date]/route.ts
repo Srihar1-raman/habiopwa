@@ -39,7 +39,7 @@ export async function GET(
     total: list.length,
     completed: list.filter((a) => a.status === "completed").length,
     completed_delayed: list.filter((a) => a.status === "completed_delayed").length,
-    delayed: list.filter((a) => a.status === "delayed").length,
+    delayed: list.filter((a) => a.status === "scheduled_delayed" || a.status === "in_progress_delayed").length,
     cancelled: list.filter((a) => a.status === "cancelled_by_customer" || a.status === "cancelled").length,
     incomplete: list.filter((a) => a.status === "incomplete").length,
   };

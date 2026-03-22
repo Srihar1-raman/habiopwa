@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Home } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
+  submitted: "bg-yellow-100 text-yellow-700",
+  captain_allocation_pending: "bg-orange-100 text-orange-800",
+  captain_review_pending: "bg-orange-100 text-orange-700",
+  payment_pending: "bg-blue-100 text-blue-700",
   active: "bg-green-100 text-green-700",
   paused: "bg-yellow-100 text-yellow-700",
+  completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-red-100 text-red-700",
-  finalized: "bg-blue-100 text-blue-700",
-  paid: "bg-emerald-100 text-emerald-700",
+  closed: "bg-gray-200 text-gray-700",
 };
 
 interface Household {
