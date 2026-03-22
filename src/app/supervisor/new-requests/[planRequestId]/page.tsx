@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ChevronLeft, CheckCircle, Minus, Plus } from "lucide-react";
+import { ChevronLeft, CheckCircle, Minus, Plus, Clock, AlertTriangle, CheckCheck, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   calcJobPrices,
@@ -61,9 +61,23 @@ interface Provider {
   provider_type: string | null;
 }
 
+interface ProviderAvailability {
+  id: string;
+  name: string;
+  provider_type: string | null;
+  is_available: boolean;
+  is_busy: boolean;
+  is_day_off: boolean;
+  on_leave: boolean;
+  day_off_day: string | null;
+  conflicts: { id: string; start: string; end: string; title: string }[];
+  all_allocations: { id: string; start: string; end: string; title: string }[];
+}
+
 interface AllocationRow {
   plan_request_item_id: string;
   service_provider_id: string;
+  backup_provider_id: string;
   scheduled_date: string;
   scheduled_start_time: string;
   scheduled_end_time: string;
@@ -109,18 +123,35 @@ function computePlanItemPrices(
   return calcJobPrices(unitValue, params);
 }
 
+/** Guess the provider_type cluster from a job title / frequency_label */
+function guessProviderTypeFromItem(item: PlanItem): string | null {
+  const text = item.title.toLowerCase();
+  if (/clean|mop|sweep|dust|wipe|floor|toilet|bathroom|kitchen/.test(text)) return "cleaning";
+  if (/cook|meal|food|breakfast|lunch|dinner/.test(text)) return "cooking";
+  if (/laundry|wash|cloth|iron/.test(text)) return "laundry";
+  if (/plant|garden|water/.test(text)) return "gardening";
+  if (/car|vehicle|bike/.test(text)) return "driver";
+  return null;
+}
+
 // ── Allocation item card ──────────────────────────────────────────────────────
 
 function AllocationCard({
   item,
   alloc,
-  providers,
+  allProviders,
+  availability,
+  availLoading,
   onChange,
+  onFetchAvailability,
 }: {
   item: PlanItem;
   alloc: AllocationRow;
-  providers: Provider[];
+  allProviders: Provider[];
+  availability: ProviderAvailability[];
+  availLoading: boolean;
   onChange: (field: keyof AllocationRow, value: string | number) => void;
+  onFetchAvailability: (date: string, start: string, end: string) => void;
 }) {
   const minUnit = item.service_jobs?.min_unit ?? (item.unit_type === "min" ? 15 : 1);
   const maxUnit = item.service_jobs?.max_unit ?? (item.unit_type === "min" ? 480 : 20);
@@ -138,7 +169,6 @@ function AllocationCard({
     item.time_multiple != null ? Number(item.time_multiple) : null
   );
 
-  // Auto-compute end time when start time changes
   const computedEndTime =
     alloc.scheduled_start_time
       ? addMinutesToTime(alloc.scheduled_start_time, durationMins)
@@ -149,6 +179,47 @@ function AllocationCard({
   function stepUnit(dir: 1 | -1) {
     const next = Math.min(maxUnit, Math.max(minUnit, alloc.unit_value + dir * interval));
     if (next !== alloc.unit_value) onChange("unit_value", next);
+  }
+
+  // Build availability map
+  const availMap = new Map(availability.map((p) => [p.id, p]));
+
+  const selectedProviderAvail = alloc.service_provider_id
+    ? availMap.get(alloc.service_provider_id)
+    : null;
+
+  const primaryHasDayOff = selectedProviderAvail?.is_day_off ?? false;
+  const primaryDayOffDay = selectedProviderAvail?.day_off_day ?? null;
+
+  // Guess relevant provider type for this item
+  const guessedType = guessProviderTypeFromItem(item);
+
+  // Providers relevant to this job type
+  const relevantProviders = guessedType
+    ? allProviders.filter(
+        (p) =>
+          p.provider_type?.toLowerCase().includes(guessedType) ||
+          guessedType.includes(p.provider_type?.toLowerCase() ?? "")
+      )
+    : allProviders;
+
+  // Providers available at the time window (for the smart hint panel)
+  const availableProviders = availability.filter(
+    (p) => p.is_available && p.id !== alloc.service_provider_id
+  );
+
+  function providerOptionLabel(p: Provider): string {
+    const avail = availMap.get(p.id);
+    const typeLabel = p.provider_type ? ` · ${p.provider_type.replace(/_/g, " ")}` : "";
+    if (!avail) return p.name + typeLabel;
+    const suffix = avail.on_leave
+      ? " 🛑 on leave"
+      : avail.is_day_off
+      ? ` 🌙 day off (${avail.day_off_day})`
+      : avail.is_busy
+      ? ` ⚠ busy (${avail.conflicts.length})`
+      : " ✓";
+    return p.name + typeLabel + suffix;
   }
 
   return (
@@ -173,98 +244,252 @@ function AllocationCard({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {/* Unit stepper */}
-        <div>
-          <label className="text-xs text-gray-500 mb-1 block">
-            {getUnitDisplayName(item.unit_type)}
-          </label>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => stepUnit(-1)}
-              disabled={alloc.unit_value <= minUnit}
-              className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Minus className="w-3.5 h-3.5 text-gray-700" />
-            </button>
-            <span className="text-sm font-semibold text-gray-900 min-w-[4.5rem] text-center">
-              {formatUnitValue(alloc.unit_value, item.unit_type)}
-            </span>
-            <button
-              type="button"
-              onClick={() => stepUnit(1)}
-              disabled={alloc.unit_value >= maxUnit}
-              className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <Plus className="w-3.5 h-3.5 text-gray-700" />
-            </button>
-          </div>
-        </div>
-
-        {/* Provider */}
-        <div>
-          <label className="text-xs text-gray-500 mb-1 block">Provider</label>
-          <select
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
-            value={alloc.service_provider_id}
-            onChange={(e) => onChange("service_provider_id", e.target.value)}
+      {/* Unit stepper */}
+      <div>
+        <label className="text-xs text-gray-500 mb-1 block">
+          {getUnitDisplayName(item.unit_type)}
+        </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => stepUnit(-1)}
+            disabled={alloc.unit_value <= minUnit}
+            className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <option value="">Select provider</option>
-            {providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-                {p.provider_type ? ` · ${p.provider_type.replace(/_/g, " ")}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Date */}
-        <div>
-          <label className="text-xs text-gray-500 mb-1 block">Date</label>
-          <input
-            type="date"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
-            value={alloc.scheduled_date}
-            onChange={(e) => onChange("scheduled_date", e.target.value)}
-          />
-        </div>
-
-        {/* Start / End time */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs text-gray-500 mb-1 block">Start Time</label>
-            <input
-              type="time"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
-              value={alloc.scheduled_start_time}
-              onChange={(e) => {
-                onChange("scheduled_start_time", e.target.value);
-                // Auto-set end time from start + duration
-                if (e.target.value) {
-                  onChange(
-                    "scheduled_end_time",
-                    addMinutesToTime(e.target.value, durationMins)
-                  );
-                }
-              }}
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-gray-500 mb-1 block">
-              End Time
-              <span className="text-gray-400 ml-1">(auto)</span>
-            </label>
-            <input
-              type="time"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
-              value={computedEndTime}
-              onChange={(e) => onChange("scheduled_end_time", e.target.value)}
-            />
-          </div>
+            <Minus className="w-3.5 h-3.5 text-gray-700" />
+          </button>
+          <span className="text-sm font-semibold text-gray-900 min-w-[4.5rem] text-center">
+            {formatUnitValue(alloc.unit_value, item.unit_type)}
+          </span>
+          <button
+            type="button"
+            onClick={() => stepUnit(1)}
+            disabled={alloc.unit_value >= maxUnit}
+            className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-3.5 h-3.5 text-gray-700" />
+          </button>
+          <span className="text-xs text-gray-400 ml-1">{durationMins} min session</span>
         </div>
       </div>
+
+      {/* Date */}
+      <div>
+        <label className="text-xs text-gray-500 mb-1 block">Date</label>
+        <input
+          type="date"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+          value={alloc.scheduled_date}
+          onChange={(e) => {
+            onChange("scheduled_date", e.target.value);
+            if (e.target.value && alloc.scheduled_start_time && alloc.scheduled_end_time) {
+              onFetchAvailability(
+                e.target.value,
+                alloc.scheduled_start_time,
+                alloc.scheduled_end_time
+              );
+            }
+          }}
+        />
+      </div>
+
+      {/* Start / End time */}
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="text-xs text-gray-500 mb-1 block">Start Time</label>
+          <input
+            type="time"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+            value={alloc.scheduled_start_time}
+            onChange={(e) => {
+              onChange("scheduled_start_time", e.target.value);
+              if (e.target.value) {
+                const et = addMinutesToTime(e.target.value, durationMins);
+                onChange("scheduled_end_time", et);
+                if (alloc.scheduled_date) {
+                  onFetchAvailability(alloc.scheduled_date, e.target.value, et);
+                }
+              }
+            }}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-xs text-gray-500 mb-1 block">
+            End Time
+            <span className="text-gray-400 ml-1">(auto)</span>
+          </label>
+          <input
+            type="time"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+            value={computedEndTime}
+            onChange={(e) => onChange("scheduled_end_time", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Smart availability panel */}
+      {alloc.scheduled_date && availability.length > 0 && (
+        <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+          <p className="text-xs font-semibold text-gray-600">
+            Team Availability on {alloc.scheduled_date}
+            {alloc.scheduled_start_time && (
+              <span className="font-normal text-gray-400">
+                {" "}· {alloc.scheduled_start_time}–{computedEndTime}
+              </span>
+            )}
+            {availLoading && (
+              <span className="ml-2 text-gray-400 font-normal">checking…</span>
+            )}
+          </p>
+          {/* Available providers for this job type */}
+          {guessedType && relevantProviders.length > 0 && (
+            <div>
+              <p className="text-[11px] text-gray-500 mb-1">
+                {guessedType.charAt(0).toUpperCase() + guessedType.slice(1)} staff
+                {alloc.scheduled_start_time ? " — free at this time:" : ":"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {relevantProviders.map((p) => {
+                  const avail = availMap.get(p.id);
+                  return (
+                    <span
+                      key={p.id}
+                      className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                        !avail
+                          ? "bg-gray-100 text-gray-500"
+                          : avail.is_available
+                          ? "bg-green-100 text-green-700"
+                          : avail.is_day_off
+                          ? "bg-amber-100 text-amber-700"
+                          : avail.on_leave
+                          ? "bg-red-100 text-red-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {p.name}
+                      {avail
+                        ? avail.is_available
+                          ? " ✓"
+                          : avail.is_day_off
+                          ? " 🌙"
+                          : avail.on_leave
+                          ? " 🛑"
+                          : " ⚠"
+                        : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Free providers outside the guessed type */}
+          {availableProviders.filter(
+            (p) =>
+              !guessedType ||
+              !relevantProviders.some((r) => r.id === p.id)
+          ).length > 0 && (
+            <div>
+              <p className="text-[11px] text-gray-500 mb-1">Other free team members:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {availableProviders
+                  .filter(
+                    (p) =>
+                      !guessedType ||
+                      !relevantProviders.some((r) => r.id === p.id)
+                  )
+                  .map((p) => (
+                    <span
+                      key={p.id}
+                      className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-600"
+                    >
+                      {p.name}
+                      {p.provider_type ? ` · ${p.provider_type.replace(/_/g, " ")}` : ""}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Primary Provider */}
+      <div>
+        <label className="text-xs text-gray-500 mb-1 block">Primary Provider</label>
+        <select
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+          value={alloc.service_provider_id}
+          onChange={(e) => onChange("service_provider_id", e.target.value)}
+        >
+          <option value="">Select provider</option>
+          {allProviders.map((p) => (
+            <option key={p.id} value={p.id}>
+              {providerOptionLabel(p)}
+            </option>
+          ))}
+        </select>
+
+        {/* Provider availability detail */}
+        {selectedProviderAvail && alloc.scheduled_date && (
+          <div
+            className={`mt-1.5 rounded-lg px-3 py-2 text-xs flex items-start gap-1.5 ${
+              selectedProviderAvail.is_available
+                ? "bg-green-50 text-green-700"
+                : selectedProviderAvail.is_day_off || selectedProviderAvail.on_leave
+                ? "bg-amber-50 text-amber-700"
+                : "bg-red-50 text-red-700"
+            }`}
+          >
+            {selectedProviderAvail.is_available ? (
+              <><CheckCheck className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> Free on {alloc.scheduled_date}</>
+            ) : selectedProviderAvail.on_leave ? (
+              <><AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> On approved leave</>
+            ) : selectedProviderAvail.is_day_off ? (
+              <><Moon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> Week-off day ({primaryDayOffDay}) — set a backup below</>
+            ) : (
+              <><Clock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> Busy: {selectedProviderAvail.conflicts.map((c) => `${c.title} ${c.start}–${c.end}`).join(", ")}</>
+            )}
+          </div>
+        )}
+
+        {/* Existing schedule for selected provider */}
+        {selectedProviderAvail && selectedProviderAvail.all_allocations.length > 0 && (
+          <div className="mt-1.5 bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 space-y-0.5">
+            <p className="font-medium text-gray-700 mb-0.5">
+              {selectedProviderAvail.name}&apos;s full schedule on {alloc.scheduled_date}:
+            </p>
+            {selectedProviderAvail.all_allocations.map((a) => (
+              <p key={a.id}>{a.start}–{a.end} · {a.title}</p>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Backup Provider — show when primary is selected and has day-off */}
+      {alloc.service_provider_id && (primaryHasDayOff || alloc.backup_provider_id) && (
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">
+            Backup Provider
+            {primaryDayOffDay && (
+              <span className="ml-1 text-amber-600">(covers {primaryDayOffDay}s)</span>
+            )}
+          </label>
+          <select
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+            value={alloc.backup_provider_id}
+            onChange={(e) => onChange("backup_provider_id", e.target.value)}
+          >
+            <option value="">No backup</option>
+            {allProviders
+              .filter((p) => p.id !== alloc.service_provider_id)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {providerOptionLabel(p)}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
@@ -277,8 +502,10 @@ export default function NewRequestAllocatePage() {
   const planRequestId = params.planRequestId as string;
 
   const [request, setRequest] = useState<RequestDetail | null>(null);
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [allProviders, setAllProviders] = useState<Provider[]>([]);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
+  const [availability, setAvailability] = useState<ProviderAvailability[]>([]);
+  const [availLoading, setAvailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -291,7 +518,8 @@ export default function NewRequestAllocatePage() {
     ]).then(([reqData, teamData]) => {
       const req: RequestDetail = reqData.request;
       setRequest(req);
-      setProviders(teamData.providers ?? []);
+      const providers: Provider[] = teamData.providers ?? [];
+      setAllProviders(providers);
 
       const isPaidPlan = req?.status === "active";
       const itemsToAllocate = isPaidPlan
@@ -302,8 +530,8 @@ export default function NewRequestAllocatePage() {
         itemsToAllocate.map((item) => ({
           plan_request_item_id: item.id,
           service_provider_id: "",
+          backup_provider_id: "",
           scheduled_date: "",
-          // Pre-populate start time from item's preferred schedule
           scheduled_start_time: item.preferred_start_time ?? "",
           scheduled_end_time: item.preferred_start_time
             ? addMinutesToTime(
@@ -322,6 +550,26 @@ export default function NewRequestAllocatePage() {
     }).catch(() => setLoading(false));
   }, [planRequestId]);
 
+  const fetchAvailability = useCallback(
+    async (date: string, startTime: string, endTime: string) => {
+      if (!date) return;
+      setAvailLoading(true);
+      try {
+        const p = new URLSearchParams({ date });
+        if (startTime) p.set("start_time", startTime);
+        if (endTime) p.set("end_time", endTime);
+        const res = await fetch(`/api/supervisor/providers/availability?${p}`);
+        if (res.ok) {
+          const d = await res.json();
+          setAvailability(d.providers ?? []);
+        }
+      } finally {
+        setAvailLoading(false);
+      }
+    },
+    []
+  );
+
   function updateAllocation(
     index: number,
     field: keyof AllocationRow,
@@ -338,12 +586,23 @@ export default function NewRequestAllocatePage() {
     setSubmitting(true);
     setError("");
     try {
+      // Build payload — include backup_provider_id and update item pricing if unit_value changed
+      const payload = allocations.map((a) => ({
+        plan_request_item_id: a.plan_request_item_id,
+        service_provider_id: a.service_provider_id,
+        backup_provider_id: a.backup_provider_id || null,
+        scheduled_date: a.scheduled_date,
+        scheduled_start_time: a.scheduled_start_time,
+        scheduled_end_time: a.scheduled_end_time,
+        unit_value: a.unit_value,
+      }));
+
       const res = await fetch(
         `/api/supervisor/new-requests/${planRequestId}/allocate`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allocations }),
+          body: JSON.stringify({ allocations: payload }),
         }
       );
       if (res.ok) {
@@ -465,13 +724,17 @@ export default function NewRequestAllocatePage() {
               alloc={allocations[idx] ?? {
                 plan_request_item_id: item.id,
                 service_provider_id: "",
+                backup_provider_id: "",
                 scheduled_date: "",
                 scheduled_start_time: "",
                 scheduled_end_time: "",
                 unit_value: item.unit_value,
               }}
-              providers={providers}
+              allProviders={allProviders}
+              availability={availability}
+              availLoading={availLoading}
               onChange={(field, value) => updateAllocation(idx, field, value)}
+              onFetchAvailability={fetchAvailability}
             />
           ))
         )}
