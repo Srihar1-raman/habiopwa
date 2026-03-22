@@ -14,15 +14,15 @@ export async function POST(req: NextRequest) {
     pause_type,
     pause_start_date,
     pause_end_date,
-    pause_duration_unit,
-    pause_duration_value,
+    job_allocation_id,
+    notes,
   } = body as {
     plan_request_id: string;
     pause_type: string;
     pause_start_date: string;
     pause_end_date?: string;
-    pause_duration_unit?: string;
-    pause_duration_value?: number;
+    job_allocation_id?: string;
+    notes?: string;
   };
 
   if (!plan_request_id || !pause_type || !pause_start_date) {
@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
       pause_type,
       pause_start_date,
       ...(pause_end_date !== undefined && { pause_end_date }),
-      ...(pause_duration_unit !== undefined && { pause_duration_unit }),
-      ...(pause_duration_value !== undefined && { pause_duration_value }),
+      ...(job_allocation_id !== undefined && { job_allocation_id }),
+      ...(notes !== undefined && { reason: notes }),
       status: "pending",
     })
     .select()

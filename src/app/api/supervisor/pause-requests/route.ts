@@ -24,7 +24,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("pause_requests")
     .select(
-      "*, customers(name, phone), plan_requests(request_code)"
+      "*, customers(name, phone), plan_requests(request_code), job_allocations(id, scheduled_date, scheduled_start_time, plan_request_items(title))"
     )
     .in("plan_request_id", planIds)
     .eq("status", "pending")

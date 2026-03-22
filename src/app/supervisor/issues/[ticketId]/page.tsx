@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ChevronLeft, Send } from "lucide-react";
+import { ChevronLeft, Send, Briefcase, Calendar, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -10,13 +10,6 @@ const STATUS_COLORS: Record<string, string> = {
   in_progress: "bg-blue-100 text-blue-700",
   resolved: "bg-green-100 text-green-700",
   closed: "bg-gray-100 text-gray-600",
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  low: "bg-gray-100 text-gray-600",
-  medium: "bg-yellow-100 text-yellow-700",
-  high: "bg-orange-100 text-orange-700",
-  urgent: "bg-red-100 text-red-700",
 };
 
 const STATUS_TRANSITIONS = ["in_progress", "resolved", "closed"] as const;
@@ -28,15 +21,22 @@ interface Comment {
   created_at: string;
 }
 
+interface JobContext {
+  scheduled_date: string | null;
+  scheduled_start_time: string | null;
+  plan_request_items: { title: string } | null;
+  service_providers: { name: string } | null;
+}
+
 interface IssueDetail {
   id: string;
   title: string;
   description: string | null;
   status: string;
-  priority: string;
   created_at: string;
   customer_name: string | null;
   customer_phone: string | null;
+  job_allocations: JobContext | null;
   comments: Comment[];
 }
 
@@ -127,6 +127,8 @@ export default function IssueDetailPage() {
     );
   }
 
+  const jobCtx = issue.job_allocations;
+
   return (
     <div className="flex flex-col min-h-dvh pb-32">
       <div className="flex items-center gap-3 px-4 pt-4 pb-3 bg-white sticky top-0 z-10 border-b border-gray-100">
@@ -150,13 +152,6 @@ export default function IssueDetailPage() {
             >
               {issue.status.replace("_", " ")}
             </span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                PRIORITY_COLORS[issue.priority] ?? "bg-gray-100 text-gray-600"
-              }`}
-            >
-              {issue.priority}
-            </span>
           </div>
           <h2 className="text-base font-bold text-gray-900 mb-1">{issue.title}</h2>
           {issue.description && (
@@ -171,6 +166,44 @@ export default function IssueDetailPage() {
             {new Date(issue.created_at).toLocaleDateString("en-IN")}
           </p>
         </div>
+
+        {/* Job context */}
+        {jobCtx && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Briefcase className="w-4 h-4 text-[#004aad]" />
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Related Job</h2>
+            </div>
+            <p className="text-sm font-semibold text-gray-900">
+              {jobCtx.plan_request_items?.title ?? "Job"}
+            </p>
+            <div className="flex flex-wrap gap-3 mt-1.5">
+              {jobCtx.scheduled_date && (
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-xs text-gray-600">
+                    {new Date(jobCtx.scheduled_date).toLocaleDateString("en-IN", {
+                      day: "numeric", month: "short", year: "numeric",
+                    })}
+                  </span>
+                </div>
+              )}
+              {jobCtx.scheduled_start_time && (
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-xs text-gray-600">
+                    {jobCtx.scheduled_start_time.slice(0, 5)}
+                  </span>
+                </div>
+              )}
+              {jobCtx.service_providers?.name && (
+                <span className="text-xs text-gray-600">
+                  Provider: {jobCtx.service_providers.name}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Status actions */}
         {issue.status !== "closed" && (

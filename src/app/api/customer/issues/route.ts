@@ -35,14 +35,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { title?: string; description?: string };
+  let body: { title?: string; description?: string; job_allocation_id?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { title, description } = body;
+  const { title, description, job_allocation_id } = body;
   if (!title || !title.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       description: description?.trim() ?? null,
       status: "open",
       priority: "medium",
+      ...(job_allocation_id ? { job_allocation_id } : {}),
     })
     .select("id, title, description, status, priority, created_at")
     .single();

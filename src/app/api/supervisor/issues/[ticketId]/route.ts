@@ -16,7 +16,8 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("issue_tickets")
     .select(
-      "*, customers(name, phone), issue_comments(*)"
+      `*, customers(name, phone), issue_comments(*),
+       job_allocations(scheduled_date, scheduled_start_time, plan_request_items(title), service_providers(name))`
     )
     .eq("id", ticketId)
     .single();
