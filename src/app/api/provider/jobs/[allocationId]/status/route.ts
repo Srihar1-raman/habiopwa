@@ -118,7 +118,7 @@ export async function PATCH(
 
     updates.actual_start_time = nowIso();
 
-    const scheduledStartSecs = scheduledToSeconds(job.scheduled_start_time);
+    const scheduledStartSecs = timeToSeconds(job.scheduled_start_time);
     const isLate = nowSecs > scheduledStartSecs + 10 * 60;
 
     // If already marked delayed or started late → promote to in_progress_delayed
@@ -134,7 +134,7 @@ export async function PATCH(
 
     updates.actual_end_time = nowIso();
 
-    const scheduledEndSecs = scheduledToSeconds(job.scheduled_end_time);
+    const scheduledEndSecs = timeToSeconds(job.scheduled_end_time);
     const isLate = nowSecs > scheduledEndSecs + 10 * 60;
 
     updates.status = isLate ? "completed_delayed" : "completed";

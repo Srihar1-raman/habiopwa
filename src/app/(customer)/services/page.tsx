@@ -278,7 +278,7 @@ export default function ServicesHomePage() {
       .then((d) => {
         const plan: PlanRequest | null = d.planRequest ?? null;
         setPlanRequest(plan);
-        if (plan?.status === "paid") {
+        if (plan?.status === "active") {
           router.replace("/plan-active");
         }
       })

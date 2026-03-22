@@ -24,7 +24,7 @@ export default function LoginPage() {
         if (!d.authenticated) return;
         if (!d.hasProfile) {
           router.replace("/onboarding");
-        } else if (d.planStatus === "paid") {
+        } else if (d.planStatus === "active") {
           router.replace("/plan-active");
         } else {
           router.replace("/services");

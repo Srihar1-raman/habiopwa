@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest) {
     .from("plan_requests")
     .select("id")
     .eq("customer_id", customer.id)
-    .eq("status", "paid")
+    .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1)
     .single();

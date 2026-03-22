@@ -66,7 +66,7 @@ export default function PauseRequestPage() {
       .then((data) => {
         // API returns { planRequest: { id, status, ... } }
         const pr = data.planRequest ?? null;
-        const active = !!(pr && pr.status === "paid");
+        const active = !!(pr && pr.status === "active");
         setHasPlan(active);
         if (active) setPlanRequestId(pr.id);
       })

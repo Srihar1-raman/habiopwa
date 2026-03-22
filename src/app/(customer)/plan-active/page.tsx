@@ -165,7 +165,7 @@ export default function PlanActivePage() {
     );
   }
 
-  if (!planRequest || planRequest.status !== "paid") {
+  if (!planRequest || planRequest.status !== "active") {
     return (
       <div className="flex flex-col min-h-dvh items-center justify-center px-8 text-center gap-4">
         <Calendar className="w-12 h-12 text-gray-300" />
