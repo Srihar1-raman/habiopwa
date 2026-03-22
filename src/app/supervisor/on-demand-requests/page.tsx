@@ -44,7 +44,11 @@ interface AllocationFormState {
 function parseTimePreference(pref: string | null): { start: string; end: string } | null {
   if (!pref) return null;
   const match = pref.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
-  if (match) return { start: match[1].padStart(5, "0"), end: match[2].padStart(5, "0") };
+  if (match) {
+    const [h1, m1] = match[1].split(":");
+    const [h2, m2] = match[2].split(":");
+    return { start: `${h1.padStart(2, "0")}:${m1}`, end: `${h2.padStart(2, "0")}:${m2}` };
+  }
   return null;
 }
 

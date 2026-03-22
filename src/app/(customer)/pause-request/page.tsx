@@ -37,6 +37,8 @@ function tomorrow(): string {
 }
 
 function daysBetween(start: string, end: string): number {
+  // Validate YYYY-MM-DD format
+  if (!start || !end || start.length < 10 || end.length < 10) return 0;
   // Parse as UTC to avoid timezone-dependent results
   const startMs = Date.UTC(
     Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))
@@ -44,7 +46,8 @@ function daysBetween(start: string, end: string): number {
   const endMs = Date.UTC(
     Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, Number(end.slice(8, 10))
   );
-  return Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
+  const diff = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
+  return isNaN(diff) ? 0 : diff;
 }
 
 export default function PauseRequestPage() {

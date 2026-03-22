@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ChevronLeft,
   User,
-  Home,
   Users,
   CalendarDays,
   AlertCircle,
@@ -136,7 +135,7 @@ export default function HouseholdDetailPage() {
   const [showAllJobs, setShowAllJobs] = useState(false);
   const [jobDateFilter, setJobDateFilter] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch(`/api/supervisor/households/${planRequestId}`)
       .then((r) => r.json())
       .then((d) => {
@@ -145,6 +144,30 @@ export default function HouseholdDetailPage() {
       })
       .catch(() => setLoading(false));
   }, [planRequestId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const today = getToday();
+  const threeDaysAgo = subtractDays(today, 2);
+
+  const allJobsByDate = useMemo(
+    () =>
+      detail
+        ? [...detail.recentJobs].sort(
+            (a, b) => (b.scheduled_date ?? "").localeCompare(a.scheduled_date ?? "")
+          )
+        : [],
+    [detail]
+  );
+  const past3DaysJobs = useMemo(
+    () =>
+      allJobsByDate.filter(
+        (j) => j.scheduled_date && j.scheduled_date >= threeDaysAgo && j.scheduled_date <= today
+      ),
+    [allJobsByDate, threeDaysAgo, today]
+  );
 
   if (loading) {
     return (
@@ -166,24 +189,6 @@ export default function HouseholdDetailPage() {
       </div>
     );
   }
-
-  const today = getToday();
-  const threeDaysAgo = subtractDays(today, 2);
-
-  const allJobsByDate = useMemo(
-    () =>
-      [...detail.recentJobs].sort(
-        (a, b) => (b.scheduled_date ?? "").localeCompare(a.scheduled_date ?? "")
-      ),
-    [detail.recentJobs]
-  );
-  const past3DaysJobs = useMemo(
-    () =>
-      allJobsByDate.filter(
-        (j) => j.scheduled_date && j.scheduled_date >= threeDaysAgo && j.scheduled_date <= today
-      ),
-    [allJobsByDate, threeDaysAgo, today]
-  );
   const filteredJobs = jobDateFilter
     ? allJobsByDate.filter((j) => j.scheduled_date === jobDateFilter)
     : showAllJobs

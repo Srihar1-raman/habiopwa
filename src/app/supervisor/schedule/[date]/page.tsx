@@ -109,7 +109,6 @@ export default function SchedulePage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetch(`/api/supervisor/schedule/${date}`)
       .then((r) => r.json())
       .then((d) => {
