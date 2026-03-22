@@ -72,8 +72,10 @@ export default function ProviderProfilePage() {
               <h2 className="text-xl font-bold text-gray-900">{provider.name}</h2>
               <span
                 className={`mt-1.5 text-xs font-medium px-3 py-1 rounded-full ${
-                  provider.status === "active"
+                  provider.status === "available"
                     ? "bg-green-100 text-green-700"
+                    : provider.status === "on_leave"
+                    ? "bg-yellow-100 text-yellow-700"
                     : "bg-gray-100 text-gray-600"
                 }`}
               >
@@ -98,7 +100,7 @@ export default function ProviderProfilePage() {
                   <Briefcase className="w-4 h-4 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Specialization</p>
+                  <p className="text-xs text-gray-500">Service Type</p>
                   <p className="text-sm font-semibold text-gray-800">{provider.provider_type?.replace(/_/g, ' ') || "—"}</p>
                 </div>
               </div>
