@@ -53,13 +53,13 @@ export default function ProviderLoginPage() {
           </label>
           <input
             type="tel"
-            placeholder="+91 98765 43210"
+            placeholder="10-digit mobile number"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
             required
+            maxLength={10}
             className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[#004aad] focus:border-transparent transition"
           />
-          <p className="text-xs text-gray-400 mt-1">Include country code (e.g. +91 for India)</p>
         </div>
 
         <div>
@@ -77,6 +77,7 @@ export default function ProviderLoginPage() {
             required
             className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base tracking-[0.3em] font-mono focus:outline-none focus:ring-2 focus:ring-[#004aad] focus:border-transparent transition"
           />
+          <p className="text-xs text-gray-400 mt-1">For MVP: use OTP 1234</p>
         </div>
 
         {error && (

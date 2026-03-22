@@ -16,7 +16,14 @@ export async function GET(req: NextRequest) {
       .from("issue_tickets")
       .select(
         `id, title, status, priority, created_at, description, supervisor_response, plan_request_id, job_allocation_id,
-         customers(id, name, phone)`
+         customers(id, name, phone),
+         plan_requests(
+           assigned_supervisor_id,
+           assigned_supervisor:staff_accounts!plan_requests_assigned_supervisor_id_fkey(
+             id, name, phone,
+             locations(name, city, sector)
+           )
+         )`
       )
       .order("created_at", { ascending: false });
 
@@ -34,6 +41,24 @@ export async function GET(req: NextRequest) {
       const customer = Array.isArray(row.customers)
         ? row.customers[0]
         : row.customers;
+      const planRequest = Array.isArray(row.plan_requests)
+        ? row.plan_requests[0]
+        : row.plan_requests;
+      const supervisor = planRequest
+        ? Array.isArray(planRequest.assigned_supervisor)
+          ? planRequest.assigned_supervisor[0]
+          : planRequest.assigned_supervisor
+        : null;
+      const location = supervisor
+        ? Array.isArray(supervisor.locations)
+          ? supervisor.locations[0]
+          : supervisor.locations
+        : null;
+      const clusterName = location
+        ? location.city
+          ? `${location.name}, ${location.city}`
+          : location.name
+        : null;
       return {
         id: row.id,
         title: row.title,
@@ -47,6 +72,9 @@ export async function GET(req: NextRequest) {
         customer_name: customer?.name ?? null,
         customer_phone: customer?.phone ?? null,
         customer_id: customer?.id ?? null,
+        supervisor_name: supervisor?.name ?? null,
+        supervisor_phone: supervisor?.phone ?? null,
+        cluster_name: clusterName,
       };
     });
 

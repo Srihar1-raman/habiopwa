@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,35 @@ export default function OnboardingPage() {
     diet_pref: "veg",
     people_count: "",
   });
+
+  // Guard: if the customer already has a profile (e.g. created by admin), skip onboarding.
+  // Also pre-fill their name if the admin set it.
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.authenticated) {
+          router.replace("/login");
+          return;
+        }
+        if (d.hasProfile) {
+          // Profile already exists — go straight to the app
+          if (d.planStatus === "active") {
+            router.replace("/plan-active");
+          } else {
+            router.replace("/services");
+          }
+          return;
+        }
+        // Pre-fill name if the admin already set it
+        if (d.customer?.name) {
+          setForm((prev) => ({ ...prev, name: d.customer.name }));
+        }
+      })
+      .catch(() => {
+        // Session check failed — stay on onboarding
+      });
+  }, [router]);
 
   const stepIndex = STEPS.indexOf(step);
 

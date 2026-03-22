@@ -20,7 +20,7 @@ interface Customer {
 
 const PLAN_STATUS_COLORS: Record<string, string> = {
   submitted: "bg-yellow-100 text-yellow-700",
-  captain_allocation_pending: "bg-orange-100 text-orange-700",
+  captain_allocation_pending: "bg-yellow-100 text-yellow-700",
   captain_review_pending: "bg-blue-100 text-blue-700",
   payment_pending: "bg-purple-100 text-purple-700",
   active: "bg-green-100 text-green-700",
@@ -33,7 +33,7 @@ const PLAN_STATUS_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   submitted: "Submitted",
-  captain_allocation_pending: "Allocation Pending",
+  captain_allocation_pending: "Submitted",
   captain_review_pending: "Review Pending",
   payment_pending: "Payment Pending",
   active: "Active",
@@ -41,20 +41,19 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   closed: "Closed",
-  cart_in_progress: "Cart In Progress",
+  cart_in_progress: "Cart (Draft)",
 };
 
 const FILTER_OPTIONS = [
   { value: "", label: "All Customers" },
   { value: "active", label: "Active Plans" },
-  { value: "captain_allocation_pending", label: "Allocation Pending" },
+  { value: "submitted", label: "Submitted (Awaiting Supervisor)" },
   { value: "captain_review_pending", label: "Review Pending" },
   { value: "payment_pending", label: "Payment Pending" },
-  { value: "submitted", label: "Submitted" },
   { value: "paused", label: "Paused" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
-  { value: "has_cart", label: "Has Cart (No Plan)" },
+  { value: "has_cart", label: "Has Cart (Not Submitted)" },
   { value: "no_plan", label: "No Plan / No Cart" },
 ];
 
@@ -62,27 +61,31 @@ function PlanActionButton({ customer }: { customer: Customer }) {
   const router = useRouter();
 
   if (customer.latest_plan_status) {
-    const actionableStatuses = [
-      "active",
-      "captain_allocation_pending",
-      "captain_review_pending",
-      "payment_pending",
-      "submitted",
-    ];
-    if (actionableStatuses.includes(customer.latest_plan_status)) {
+    const draftStatuses = ["cart_in_progress"];
+    if (draftStatuses.includes(customer.latest_plan_status)) {
       return (
         <button
           onClick={(e) => {
             e.stopPropagation();
             router.push(`/admin/customers/${customer.id}`);
           }}
-          className="text-xs px-2.5 py-1 rounded-md bg-[#004aad] text-white hover:bg-blue-700 transition-colors"
+          className="text-xs px-2.5 py-1 rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
         >
-          View Plan
+          Edit Draft
         </button>
       );
     }
-    return null;
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          router.push(`/admin/customers/${customer.id}`);
+        }}
+        className="text-xs px-2.5 py-1 rounded-md bg-[#004aad] text-white hover:bg-blue-700 transition-colors"
+      >
+        View Plan
+      </button>
+    );
   }
 
   if (customer.cart_id) {

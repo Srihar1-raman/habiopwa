@@ -18,17 +18,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid OTP" }, { status: 401 });
   }
 
-  // Fetch or create customer
+  // Fetch or create customer — use maybeSingle() so 0-row result is data:null, not an error
   const { data: customerData, error: fetchError } = await supabaseAdmin
     .from("customers")
     .select("id, phone, name")
     .eq("phone", phone)
-    .single();
+    .maybeSingle();
 
   let customer = customerData;
 
   if (fetchError || !customer) {
-    // Create if not exists
+    // Only create a new customer when none exists with this phone
     const { data: newCustomer, error: insertError } = await supabaseAdmin
       .from("customers")
       .insert({ phone })
@@ -42,11 +42,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Check if customer has a profile (determines if onboarding needed)
+  // Use maybeSingle() — single() throws on 0 rows which masks a real "no profile" vs DB error
   const { data: profile } = await supabaseAdmin
     .from("customer_profiles")
     .select("customer_id")
     .eq("customer_id", customer.id)
-    .single();
+    .maybeSingle();
 
   const hasProfile = !!profile;
 

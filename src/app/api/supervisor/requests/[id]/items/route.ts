@@ -113,3 +113,120 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true, total });
 }
+
+// POST — add a single item to the request
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const item = (await req.json()) as PlanItemInput;
+
+  if (!item.title || !item.category_id) {
+    return NextResponse.json({ error: "title and category_id are required" }, { status: 400 });
+  }
+
+  // Verify request exists and is editable
+  const { data: planRequest } = await supabaseAdmin
+    .from("plan_requests")
+    .select("id, status")
+    .eq("id", id)
+    .single();
+
+  if (!planRequest) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (["cancelled", "closed"].includes(planRequest.status)) {
+    return NextResponse.json({ error: "Cannot modify this request" }, { status: 400 });
+  }
+
+  const { data: newItem, error: insertError } = await supabaseAdmin
+    .from("plan_request_items")
+    .insert({
+      plan_request_id: id,
+      category_id: item.category_id,
+      job_id: item.job_id || null,
+      job_code: item.job_code || null,
+      title: item.title,
+      frequency_label: item.frequency_label || "Daily",
+      unit_type: item.unit_type || "min",
+      unit_value: item.unit_value ?? item.minutes ?? 30,
+      minutes: item.minutes ?? item.unit_value ?? 30,
+      base_rate_per_unit: item.base_rate_per_unit ?? null,
+      instances_per_month: item.instances_per_month ?? null,
+      discount_pct: item.discount_pct ?? null,
+      time_multiple: item.time_multiple ?? null,
+      formula_type: item.formula_type || null,
+      base_price_monthly: item.base_price_monthly ?? null,
+      price_monthly: item.price_monthly,
+      mrp_monthly: item.mrp_monthly || null,
+    })
+    .select("*")
+    .single();
+
+  if (insertError || !newItem) {
+    return NextResponse.json({ error: insertError?.message ?? "Insert failed" }, { status: 500 });
+  }
+
+  // Recalculate plan total
+  const { data: allItems } = await supabaseAdmin
+    .from("plan_request_items")
+    .select("price_monthly")
+    .eq("plan_request_id", id);
+
+  const total = (allItems ?? []).reduce((s, i) => s + Number(i.price_monthly ?? 0), 0);
+  await supabaseAdmin
+    .from("plan_requests")
+    .update({ total_price_monthly: total })
+    .eq("id", id);
+
+  return NextResponse.json({ item: newItem, total }, { status: 201 });
+}
+
+// DELETE — remove a single item from the request
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const staff = await getStaffFromRequest();
+  if (!staff || staff.role !== "supervisor" || staff.status !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const itemId = searchParams.get("itemId");
+
+  if (!itemId) {
+    return NextResponse.json({ error: "itemId query param is required" }, { status: 400 });
+  }
+
+  const { error: deleteError } = await supabaseAdmin
+    .from("plan_request_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("plan_request_id", id);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  // Recalculate plan total
+  const { data: allItems } = await supabaseAdmin
+    .from("plan_request_items")
+    .select("price_monthly")
+    .eq("plan_request_id", id);
+
+  const total = (allItems ?? []).reduce((s, i) => s + Number(i.price_monthly ?? 0), 0);
+  await supabaseAdmin
+    .from("plan_requests")
+    .update({ total_price_monthly: total })
+    .eq("id", id);
+
+  return NextResponse.json({ ok: true, total });
+}

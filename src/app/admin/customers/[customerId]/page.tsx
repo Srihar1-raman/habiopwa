@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, UserCheck, RefreshCw } from "lucide-react";
+import { ArrowLeft, UserCheck, RefreshCw, Plus, UserCog } from "lucide-react";
 
 interface CustomerProfile {
   flat_no: string | null;
@@ -21,6 +21,8 @@ interface Customer {
   id: string;
   phone: string;
   name: string;
+  default_supervisor_id: string | null;
+  default_supervisor?: { id: string; name: string; phone: string } | null;
   customer_profiles: CustomerProfile[] | CustomerProfile | null;
 }
 
@@ -35,6 +37,7 @@ interface PlanRequest {
   created_at: string;
   is_recurring: boolean;
   assigned_supervisor_id: string | null;
+  assigned_supervisor?: { id: string; name: string; phone: string } | null;
 }
 
 interface IssueTicket {
@@ -54,7 +57,7 @@ interface Supervisor {
 
 const STATUS_COLORS: Record<string, string> = {
   submitted: "bg-yellow-100 text-yellow-700",
-  captain_allocation_pending: "bg-orange-100 text-orange-700",
+  captain_allocation_pending: "bg-yellow-100 text-yellow-700",
   captain_review_pending: "bg-blue-100 text-blue-700",
   payment_pending: "bg-purple-100 text-purple-700",
   active: "bg-green-100 text-green-700",
@@ -69,7 +72,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   submitted: "Submitted",
-  captain_allocation_pending: "Allocation Pending",
+  captain_allocation_pending: "Submitted",
   captain_review_pending: "Review Pending",
   payment_pending: "Payment Pending",
   active: "Active",
@@ -77,6 +80,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   closed: "Closed",
+  cart_in_progress: "Cart (Draft)",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -191,6 +195,33 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allocateModal, setAllocateModal] = useState<PlanRequest | null>(null);
+  const [creatingPlan, setCreatingPlan] = useState(false);
+  // Customer-level supervisor assignment
+  const [selectedDefaultSv, setSelectedDefaultSv] = useState("");
+  const [savingDefaultSv, setSavingDefaultSv] = useState(false);
+  const [svError, setSvError] = useState<string | null>(null);
+
+  async function handleCreatePlan() {
+    if (creatingPlan) return;
+    setCreatingPlan(true);
+    try {
+      const res = await fetch("/api/admin/plan-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: customerId }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+      } else {
+        router.push(`/admin/customers/${customerId}/plans/${data.planRequest.id}`);
+      }
+    } catch {
+      alert("Failed to create plan");
+    } finally {
+      setCreatingPlan(false);
+    }
+  }
 
   function loadData() {
     if (!customerId) return;
@@ -202,15 +233,30 @@ export default function CustomerDetailPage() {
           setCustomer(data.customer);
           setPlanRequests(data.planRequests ?? []);
           setIssueTickets(data.issueTickets ?? []);
+          setSelectedDefaultSv(data.customer?.default_supervisor_id ?? "");
         }
       })
       .catch(() => setError("Failed to load customer"))
       .finally(() => setLoading(false));
   }
 
+  async function handleSaveDefaultSupervisor() {
+    setSavingDefaultSv(true);
+    setSvError(null);
+    const res = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ default_supervisor_id: selectedDefaultSv || null }),
+    });
+    const data = await res.json();
+    setSavingDefaultSv(false);
+    if (data.error) setSvError(data.error);
+    else loadData();
+  }
+
   useEffect(() => {
     loadData();
-    // Load active supervisors for the allocation modal
+    // Load active supervisors for the allocation modal and supervisor assignment
     fetch("/api/admin/staff?role=supervisor&status=active")
       .then((r) => r.json())
       .then((data) => setSupervisors(data.staff ?? []))
@@ -306,12 +352,64 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
+      {/* ── Supervisor Assignment (PRIMARY STEP) ─────────────────────── */}
+      <div className={`bg-white rounded-xl shadow-sm p-5 border-l-4 ${customer.default_supervisor_id ? "border-green-400" : "border-amber-400"}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <UserCog size={16} className={customer.default_supervisor_id ? "text-green-600" : "text-amber-600"} />
+          <h2 className="font-semibold text-gray-900">Assigned Supervisor</h2>
+          {!customer.default_supervisor_id && (
+            <span className="ml-1 text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+              Required — assign before creating plans
+            </span>
+          )}
+        </div>
+
+        {customer.default_supervisor && (
+          <div className="mb-3 text-sm text-gray-700">
+            <p className="font-medium">{customer.default_supervisor.name}</p>
+            <p className="text-gray-500">{customer.default_supervisor.phone}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2 items-center">
+          <select
+            value={selectedDefaultSv}
+            onChange={(e) => setSelectedDefaultSv(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]"
+          >
+            <option value="">— Choose supervisor —</option>
+            {supervisors.map((sv) => (
+              <option key={sv.id} value={sv.id}>
+                {sv.name} ({sv.phone})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSaveDefaultSupervisor}
+            disabled={savingDefaultSv || selectedDefaultSv === (customer.default_supervisor_id ?? "")}
+            className="px-4 py-2 bg-[#004aad] text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            {savingDefaultSv ? "Saving…" : customer.default_supervisor_id ? "Reassign" : "Assign"}
+          </button>
+        </div>
+        {svError && <p className="text-xs text-red-600 mt-2">{svError}</p>}
+      </div>
+
       {/* Plan Requests */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">
             Plan Requests ({planRequests.length})
           </h2>
+          <button
+            onClick={handleCreatePlan}
+            disabled={creatingPlan || !customer.default_supervisor_id}
+            title={!customer.default_supervisor_id ? "Assign a supervisor first" : undefined}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-[#004aad] text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={14} />
+            {creatingPlan ? "Creating…" : "Create Plan"}
+          </button>
         </div>
         {planRequests.length === 0 ? (
           <p className="px-5 py-6 text-gray-500 text-sm">No plan requests</p>
@@ -329,7 +427,11 @@ export default function CustomerDetailPage() {
             </thead>
             <tbody>
               {planRequests.map((pr) => (
-                <tr key={pr.id} className="border-b border-gray-50">
+                <tr
+                  key={pr.id}
+                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/admin/customers/${customerId}/plans/${pr.id}`)}
+                >
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{pr.request_code}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[pr.status] ?? "bg-gray-100 text-gray-600"}`}>
@@ -345,7 +447,7 @@ export default function CustomerDetailPage() {
                   <td className="px-4 py-2.5 text-gray-500">
                     {new Date(pr.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                     {canAllocateSupervisor(pr) && (
                       <button
                         onClick={() => setAllocateModal(pr)}

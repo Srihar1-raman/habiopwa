@@ -17,9 +17,9 @@ interface PlanRequest {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  cart_in_progress: "bg-gray-100 text-gray-600",
+  cart_in_progress: "bg-amber-100 text-amber-700",
   submitted: "bg-yellow-100 text-yellow-700",
-  captain_allocation_pending: "bg-orange-100 text-orange-700",
+  captain_allocation_pending: "bg-yellow-100 text-yellow-700",
   captain_review_pending: "bg-blue-100 text-blue-700",
   payment_pending: "bg-purple-100 text-purple-700",
   active: "bg-green-100 text-green-700",
@@ -27,6 +27,19 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-gray-100 text-gray-500",
   closed: "bg-gray-200 text-gray-700",
+};
+
+const STATUS_DISPLAY: Record<string, string> = {
+  cart_in_progress: "Cart (Draft)",
+  submitted: "Submitted",
+  captain_allocation_pending: "Submitted",
+  captain_review_pending: "Review Pending",
+  payment_pending: "Payment Pending",
+  active: "Active",
+  paused: "Paused",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  closed: "Closed",
 };
 
 const STATUSES = [
@@ -131,7 +144,7 @@ export default function PlanRequestsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[r.status] ?? "bg-gray-100 text-gray-600"}`}>
-                      {r.status}
+                      {STATUS_DISPLAY[r.status] ?? r.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-700">

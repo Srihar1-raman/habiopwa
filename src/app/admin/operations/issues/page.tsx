@@ -13,6 +13,9 @@ interface IssueTicket {
   customer_name: string | null;
   customer_phone: string | null;
   customer_id: string | null;
+  supervisor_name: string | null;
+  supervisor_phone: string | null;
+  cluster_name: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -122,6 +125,8 @@ export default function IssuesPage() {
             <tr className="border-b border-gray-100 bg-gray-50">
               <th className="text-left px-4 py-3 font-medium text-gray-600">Title</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Customer</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Supervisor</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Cluster</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Priority</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Created</th>
@@ -131,7 +136,7 @@ export default function IssuesPage() {
             {loading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-gray-50">
-                  {Array.from({ length: 5 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-gray-200 rounded animate-pulse" />
                     </td>
@@ -140,7 +145,7 @@ export default function IssuesPage() {
               ))}
             {!loading && issues.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   No issues found
                 </td>
               </tr>
@@ -157,6 +162,11 @@ export default function IssuesPage() {
                     <p className="text-gray-700">{issue.customer_name ?? "—"}</p>
                     <p className="text-gray-400 text-xs">{issue.customer_phone ?? ""}</p>
                   </td>
+                  <td className="px-4 py-3">
+                    <p className="text-gray-700">{issue.supervisor_name ?? "—"}</p>
+                    <p className="text-gray-400 text-xs">{issue.supervisor_phone ?? ""}</p>
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">{issue.cluster_name ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[issue.status] ?? "bg-gray-100 text-gray-600"}`}>
                       {issue.status}
@@ -189,6 +199,25 @@ export default function IssuesPage() {
                 {selected.customer_name ?? "Unknown customer"}
               </span>
             </div>
+            {(selected.supervisor_name || selected.cluster_name) && (
+              <div className="bg-blue-50 rounded-lg px-3 py-2 mb-3 text-sm space-y-0.5">
+                {selected.supervisor_name && (
+                  <p className="text-gray-700">
+                    <span className="font-medium text-gray-500">Supervisor:</span>{" "}
+                    {selected.supervisor_name}
+                    {selected.supervisor_phone && (
+                      <span className="text-gray-400 ml-1 text-xs">· {selected.supervisor_phone}</span>
+                    )}
+                  </p>
+                )}
+                {selected.cluster_name && (
+                  <p className="text-gray-700">
+                    <span className="font-medium text-gray-500">Cluster:</span>{" "}
+                    {selected.cluster_name}
+                  </p>
+                )}
+              </div>
+            )}
             {selected.description && (
               <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 mb-4">
                 {selected.description}

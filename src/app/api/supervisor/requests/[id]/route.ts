@@ -21,7 +21,7 @@ export async function GET(
        plan_request_items(
          *,
          service_categories(slug, name),
-         service_jobs(slug, name, code)
+         service_jobs(slug, name, code, min_unit, max_unit, unit_interval)
        ),
        plan_request_events(id, event_type, note, created_at)`
     )

@@ -2,8 +2,43 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getStaffFromRequest } from "@/lib/staff-session";
 
+// GET /api/admin/plan-requests/[planRequestId]
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ planRequestId: string }> }
+) {
+  try {
+    const staff = await getStaffFromRequest();
+    if (!staff || !["admin", "ops_lead", "manager"].includes(staff.role)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { planRequestId } = await params;
+
+    const { data, error } = await supabaseAdmin
+      .from("plan_requests")
+      .select(
+        `*, customers(id, name, phone, customer_profiles(*)),
+         assigned_supervisor:staff_accounts!plan_requests_assigned_supervisor_id_fkey(id, name, phone),
+         payments(id, amount, status, created_at),
+         plan_request_items(*, service_categories(slug, name), service_jobs(slug, name, code, min_unit, max_unit, unit_interval))`
+      )
+      .eq("id", planRequestId)
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ error: "Plan request not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ planRequest: data });
+  } catch (err) {
+    console.error("Plan request GET error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 // PATCH /api/admin/plan-requests/[planRequestId]
-// Update assigned_supervisor_id and/or status for a plan request
+// Update assigned_supervisor_id, status, and/or admin_remarks for a plan request
 // Auth: admin, ops_lead, manager
 export async function PATCH(
   req: NextRequest,
@@ -17,11 +52,11 @@ export async function PATCH(
 
     const { planRequestId } = await params;
     const body = await req.json();
-    const { assigned_supervisor_id, status } = body ?? {};
+    const { assigned_supervisor_id, status, admin_remarks, preferred_start_date } = body ?? {};
 
-    if (!assigned_supervisor_id && !status) {
+    if (!assigned_supervisor_id && !status && admin_remarks === undefined && preferred_start_date === undefined) {
       return NextResponse.json(
-        { error: "At least one of assigned_supervisor_id or status is required" },
+        { error: "At least one of assigned_supervisor_id, status, admin_remarks, or preferred_start_date is required" },
         { status: 400 }
       );
     }
@@ -56,7 +91,7 @@ export async function PATCH(
     }
 
     // Build update object
-    const updates: Record<string, string> = {};
+    const updates: Record<string, unknown> = {};
     if (assigned_supervisor_id) {
       updates.assigned_supervisor_id = assigned_supervisor_id;
       // Auto-advance status when supervisor is first assigned
@@ -70,6 +105,12 @@ export async function PATCH(
     }
     if (status) {
       updates.status = status;
+    }
+    if (admin_remarks !== undefined) {
+      updates.admin_remarks = admin_remarks;
+    }
+    if (preferred_start_date !== undefined) {
+      updates.plan_start_date = preferred_start_date;
     }
 
     const { error: updateError } = await supabaseAdmin
@@ -87,7 +128,9 @@ export async function PATCH(
         ? `Supervisor allocated by admin (${staff.name})`
         : assigned_supervisor_id
         ? `Supervisor reassigned by admin (${staff.name})`
-        : `Status updated to ${status} by admin (${staff.name})`;
+        : status
+        ? `Status updated to ${status} by admin (${staff.name})`
+        : `Plan updated by admin (${staff.name})`;
 
     await supabaseAdmin.from("plan_request_events").insert({
       plan_request_id: planRequestId,

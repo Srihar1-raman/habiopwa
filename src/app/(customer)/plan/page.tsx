@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { CartItem } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Pencil, CheckCircle, ShoppingCart, Zap, Wrench, Hammer, CalendarDays } from "lucide-react";
+import { ChevronLeft, Pencil, CheckCircle, ShoppingCart, Zap, Wrench, Hammer, CalendarDays, Clock } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatUnitValue } from "@/lib/pricing";
 
@@ -15,6 +15,28 @@ interface SubmittedRequest {
   status: string;
   total: number;
   planStartDate: string | null;
+}
+
+// Plan request data for admin-created plans
+interface PlanItem {
+  id: string;
+  title: string;
+  category_id: string;
+  frequency_label: string;
+  unit_type: string | null;
+  unit_value: number | null;
+  minutes: number | null;
+  price_monthly: number;
+  service_categories?: { name: string } | null;
+}
+
+interface PlanRequest {
+  id: string;
+  request_code: string;
+  status: string;
+  total_price_monthly: number;
+  plan_start_date: string | null;
+  plan_request_items: PlanItem[];
 }
 
 /** Formats a YYYY-MM-DD string as "21 March '26" */
@@ -45,6 +67,16 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<SubmittedRequest | null>(null);
   const [error, setError] = useState("");
+  // undefined = still loading, null = no plan request
+  const [planRequest, setPlanRequest] = useState<PlanRequest | null | undefined>(undefined);
+
+  // Fetch existing plan request (for admin-created plans whose items live in plan_request_items)
+  useEffect(() => {
+    fetch("/api/plan/current")
+      .then((r) => r.json())
+      .then((d) => setPlanRequest(d.planRequest ?? null))
+      .catch(() => setPlanRequest(null));
+  }, []);
 
   // Display date: use stored preferred date or default +3 days
   const displayStartDate = preferredStartDate ?? defaultStartDate();
@@ -79,10 +111,119 @@ export default function PlanPage() {
     });
   }
 
-  if (cartLoading) {
+  if (cartLoading || planRequest === undefined) {
     return (
       <div className="flex flex-col min-h-dvh items-center justify-center text-gray-400">
         Loading...
+      </div>
+    );
+  }
+
+  // Admin-created plan: cart is empty but there IS a plan request with items
+  if (items.length === 0 && !submitted && planRequest && planRequest.plan_request_items.length > 0) {
+    const prGrouped = planRequest.plan_request_items.reduce(
+      (acc, item) => {
+        const key = item.service_categories?.name ?? "Services";
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      },
+      {} as Record<string, PlanItem[]>
+    );
+    const isUnderReview = !["active", "payment_pending"].includes(planRequest.status);
+
+    return (
+      <div className="flex flex-col min-h-dvh pb-8">
+        {/* App bar */}
+        <div className="flex items-center gap-3 px-4 pt-12 pb-4 bg-white sticky top-0 z-10 border-b border-gray-100">
+          <button
+            onClick={() => router.back()}
+            className="p-2 -ml-2 rounded-full hover:bg-gray-100"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-700" />
+          </button>
+          <h1 className="flex-1 text-center text-lg font-bold text-gray-900 pr-8">
+            Your Overall Plan
+          </h1>
+        </div>
+
+        <div className="px-4 mt-4">
+          {/* Status banner */}
+          {isUnderReview && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 flex items-center gap-3">
+              <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-amber-800 text-sm">Plan Under Review</p>
+                <p className="text-xs text-amber-600">Our team is finalizing your plan</p>
+              </div>
+            </div>
+          )}
+
+          {/* Summary header */}
+          <div className="bg-blue-50 rounded-2xl p-4 mb-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-gray-600">Job cards</p>
+                <p className="text-2xl font-bold text-gray-900">{planRequest.plan_request_items.length}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Plan value</p>
+                <p className="text-2xl font-bold text-[#004aad]">
+                  {formatCurrency(planRequest.total_price_monthly)}
+                  <span className="text-sm font-normal text-gray-500"> / m</span>
+                </p>
+              </div>
+            </div>
+            {planRequest.plan_start_date && (
+              <div className="mt-3 pt-3 border-t border-blue-100 flex items-center gap-1.5">
+                <CalendarDays className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                <p className="text-xs text-gray-500">
+                  Plan Start Date:{" "}
+                  <span className="font-medium text-gray-700">
+                    {formatStartDate(planRequest.plan_start_date)}
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Plan items grouped by category */}
+          {Object.entries(prGrouped).map(([catName, catItems]) => (
+            <div
+              key={catName}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-3"
+            >
+              <div className="px-4 py-3 border-b border-gray-50">
+                <p className="font-semibold text-gray-900">{catName}</p>
+                <p className="text-xs text-gray-500">
+                  {formatCurrency(catItems.reduce((s, i) => s + i.price_monthly, 0))} / m
+                </p>
+              </div>
+              <div className="px-4 py-2">
+                {catItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{item.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {item.frequency_label} ·{" "}
+                        {formatUnitValue(
+                          item.unit_value ?? item.minutes ?? 0,
+                          item.unit_type ?? "min"
+                        )}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatCurrency(item.price_monthly)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
