@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getStaffFromRequest } from "@/lib/staff-session";
+import { calcJobPrices, type JobPricingParams } from "@/lib/pricing";
 
 // PATCH /api/admin/plan-requests/[planRequestId]/items/[itemId]
 export async function PATCH(
@@ -15,19 +16,79 @@ export async function PATCH(
 
     const { planRequestId, itemId } = await params;
     const body = await req.json();
-    const { title, unit_value, price_monthly } = body ?? {};
+    const {
+      title,
+      unit_value,
+      preferred_start_time,
+      preferred_provider_id,
+    } = body ?? {};
 
-    if (title === undefined && unit_value === undefined && price_monthly === undefined) {
+    if (
+      title === undefined &&
+      unit_value === undefined &&
+      preferred_start_time === undefined &&
+      preferred_provider_id === undefined
+    ) {
       return NextResponse.json(
-        { error: "At least one of title, unit_value, or price_monthly is required" },
+        { error: "At least one field is required" },
         { status: 400 }
       );
     }
 
+    // Fetch existing item to recompute pricing
+    const { data: existingItem, error: fetchErr } = await supabaseAdmin
+      .from("plan_request_items")
+      .select("*")
+      .eq("id", itemId)
+      .eq("plan_request_id", planRequestId)
+      .single();
+
+    if (fetchErr || !existingItem) {
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+
     const updates: Record<string, unknown> = {};
     if (title !== undefined) updates.title = title;
-    if (unit_value !== undefined) updates.unit_value = unit_value;
-    if (price_monthly !== undefined) updates.price_monthly = price_monthly;
+    if (preferred_start_time !== undefined)
+      updates.preferred_start_time = preferred_start_time || null;
+    if (preferred_provider_id !== undefined)
+      updates.preferred_provider_id = preferred_provider_id || null;
+
+    // When unit_value changes, recompute pricing from stored formula params
+    if (unit_value !== undefined) {
+      updates.unit_value = unit_value;
+
+      // Compute new minutes
+      const tm = existingItem.time_multiple
+        ? Number(existingItem.time_multiple)
+        : null;
+      const minutes =
+        existingItem.unit_type === "min"
+          ? unit_value
+          : tm != null && tm > 0
+          ? Math.round(unit_value * tm)
+          : unit_value;
+      updates.minutes = minutes;
+
+      // Recompute pricing if formula params are stored
+      if (
+        existingItem.base_rate_per_unit != null &&
+        existingItem.instances_per_month != null
+      ) {
+        const pricingParams: JobPricingParams = {
+          formula_type: existingItem.formula_type ?? "standard",
+          unit_type: existingItem.unit_type ?? "min",
+          base_rate_per_unit: Number(existingItem.base_rate_per_unit),
+          instances_per_month: Number(existingItem.instances_per_month),
+          discount_pct: Number(existingItem.discount_pct ?? 0),
+          time_multiple: tm,
+        };
+        const { base, effective } = calcJobPrices(unit_value, pricingParams);
+        updates.base_price_monthly = base;
+        updates.price_monthly = effective;
+        updates.mrp_monthly = base;
+      }
+    }
 
     const { data: item, error: updateError } = await supabaseAdmin
       .from("plan_request_items")
@@ -38,8 +99,26 @@ export async function PATCH(
       .single();
 
     if (updateError || !item) {
-      return NextResponse.json({ error: updateError?.message ?? "Item not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: updateError?.message ?? "Item not found" },
+        { status: 404 }
+      );
     }
+
+    // Recalculate and update plan total_price_monthly
+    const { data: allItems } = await supabaseAdmin
+      .from("plan_request_items")
+      .select("price_monthly")
+      .eq("plan_request_id", planRequestId);
+
+    const newTotal = (allItems ?? []).reduce(
+      (sum, i) => sum + Number(i.price_monthly ?? 0),
+      0
+    );
+    await supabaseAdmin
+      .from("plan_requests")
+      .update({ total_price_monthly: newTotal })
+      .eq("id", planRequestId);
 
     return NextResponse.json({ item });
   } catch (err) {

@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Search, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Search, X, Minus } from "lucide-react";
+import {
+  calcJobPrices,
+  getUnitLabel,
+  getUnitDisplayName,
+  formatUnitValue,
+  type JobPricingParams,
+} from "@/lib/pricing";
+import { formatCurrency } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,10 +46,32 @@ interface PlanItem {
   frequency_label: string;
   unit_type: string;
   unit_value: number;
-  price_monthly: number;
+  minutes: number;
+  base_rate_per_unit: number | null;
+  instances_per_month: number | null;
+  discount_pct: number | null;
+  time_multiple: number | null;
   formula_type: string | null;
+  base_price_monthly: number | null;
+  price_monthly: number;
+  mrp_monthly: number | null;
+  preferred_start_time: string | null;
+  preferred_provider_id: string | null;
   service_categories: { slug: string; name: string } | null;
-  service_jobs: { slug: string; name: string; code: string } | null;
+  service_jobs: {
+    slug: string;
+    name: string;
+    code: string;
+    min_unit?: number;
+    max_unit?: number;
+    unit_interval?: number;
+  } | null;
+}
+
+interface ServiceProvider {
+  id: string;
+  name: string;
+  provider_type: string | null;
 }
 
 interface Payment {
@@ -78,7 +108,14 @@ interface ServiceJob {
   frequency_label: string;
   unit_type: string;
   default_unit: number;
+  min_unit: number;
+  max_unit: number;
+  unit_interval: number;
   formula_type: string;
+  base_rate_per_unit: number;
+  instances_per_month: number;
+  discount_pct: number;
+  time_multiple: number | null;
   service_categories: { id: string; slug: string; name: string } | null;
   category_name: string | null;
 }
@@ -129,6 +166,63 @@ function formatAddress(profile: CustomerProfile | null): string {
   return [profile.flat_no, profile.building, profile.society, profile.sector, profile.city, profile.pincode]
     .filter(Boolean)
     .join(", ");
+}
+
+/** Add minutes to a HH:MM time string, returns HH:MM. */
+function addMinutesToTime(timeStr: string, minutes: number): string {
+  const [h, m] = timeStr.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const nh = Math.floor(total / 60) % 24;
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+}
+
+/** Compute session duration in minutes from an item's unit_type/value/time_multiple. */
+function computeItemMinutes(
+  unitType: string,
+  unitValue: number,
+  timeMultiple: number | null
+): number {
+  if (unitType === "min") return unitValue;
+  if (timeMultiple != null && timeMultiple > 0)
+    return Math.round(unitValue * timeMultiple);
+  return 30;
+}
+
+/** Live formula-based price computation from item pricing params. */
+function computeItemPrices(
+  item: PlanItem,
+  unitValue: number
+): { base: number; effective: number } {
+  if (item.base_rate_per_unit == null || item.instances_per_month == null) {
+    return {
+      base: item.base_price_monthly ?? item.price_monthly,
+      effective: item.price_monthly,
+    };
+  }
+  const params: JobPricingParams = {
+    formula_type: item.formula_type ?? "standard",
+    unit_type: item.unit_type,
+    base_rate_per_unit: Number(item.base_rate_per_unit),
+    instances_per_month: Number(item.instances_per_month),
+    discount_pct: Number(item.discount_pct ?? 0),
+    time_multiple: item.time_multiple != null ? Number(item.time_multiple) : null,
+  };
+  return calcJobPrices(unitValue, params);
+}
+
+/** Formula insight string for display. */
+function itemFormulaInsight(item: PlanItem, unitValue: number): string {
+  if (item.base_rate_per_unit == null || item.instances_per_month == null)
+    return "";
+  const rate = Number(item.base_rate_per_unit).toFixed(2);
+  const inst = `${item.instances_per_month} visits/mo`;
+  if (item.unit_type === "min") return `${unitValue} min × ₹${rate}/min × ${inst}`;
+  const unitLabel = getUnitLabel(item.unit_type);
+  const tmPart = item.time_multiple
+    ? ` × ${item.time_multiple} min/${unitLabel.replace(/s$/, "")}`
+    : "";
+  return `${unitValue} ${unitLabel}${tmPart} × ₹${rate}/min × ${inst}`;
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -210,136 +304,240 @@ function ServiceCatalogModal({
   );
 }
 
-function EditableItemRow({
+/** Card-based editable item — shows unit stepper, start time, provider, formula price. */
+function EditableItemCard({
   item,
+  providers,
   onUpdate,
   onDelete,
 }: {
   item: PlanItem;
-  onUpdate: (id: string, field: string, value: string | number) => void;
+  providers: ServiceProvider[];
+  onUpdate: (id: string, updates: Record<string, unknown>) => Promise<void>;
   onDelete: (id: string) => void;
 }) {
   const [title, setTitle] = useState(item.title);
-  const [unitValue, setUnitValue] = useState(String(item.unit_value));
-  const [price, setPrice] = useState(String(item.price_monthly));
-  const [saving, setSaving] = useState(false);
+  const [unitValue, setUnitValue] = useState(item.unit_value);
+  const [startTime, setStartTime] = useState(item.preferred_start_time ?? "");
+  const [providerId, setProviderId] = useState(item.preferred_provider_id ?? "");
+  const [saving, setSaving] = useState<string | null>(null);
 
-  async function save(field: string, value: string | number) {
-    setSaving(true);
-    await onUpdate(item.id, field, value);
-    setSaving(false);
+  const minUnit = item.service_jobs?.min_unit ?? (item.unit_type === "min" ? 15 : 1);
+  const maxUnit = item.service_jobs?.max_unit ?? (item.unit_type === "min" ? 480 : 20);
+  const interval =
+    item.service_jobs?.unit_interval ?? (item.unit_type === "min" ? 15 : 1);
+
+  const { base, effective } = useMemo(
+    () => computeItemPrices(item, unitValue),
+    [item, unitValue]
+  );
+  const discountPct = item.discount_pct ? Number(item.discount_pct) : 0;
+  const durationMins = computeItemMinutes(
+    item.unit_type,
+    unitValue,
+    item.time_multiple != null ? Number(item.time_multiple) : null
+  );
+  const endTime = startTime ? addMinutesToTime(startTime, durationMins) : "";
+  const insight = itemFormulaInsight(item, unitValue);
+
+  async function save(updates: Record<string, unknown>) {
+    setSaving(Object.keys(updates)[0]);
+    await onUpdate(item.id, updates);
+    setSaving(null);
+  }
+
+  function stepUnit(dir: 1 | -1) {
+    const next = Math.min(maxUnit, Math.max(minUnit, unitValue + dir * interval));
+    if (next === unitValue) return;
+    setUnitValue(next);
+    save({ unit_value: next });
   }
 
   return (
-    <tr className="border-b border-gray-100">
-      <td className="px-4 py-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title !== item.title && save("title", title)}
-          className="w-full text-sm border border-transparent hover:border-gray-200 focus:border-[#004aad] rounded px-2 py-1 focus:outline-none"
-        />
-      </td>
-      <td className="px-4 py-2 text-xs text-gray-500">
-        {item.service_categories?.name ?? "—"}
-      </td>
-      <td className="px-4 py-2 text-xs text-gray-500">{item.frequency_label}</td>
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={unitValue}
-          onChange={(e) => setUnitValue(e.target.value)}
-          onBlur={() => unitValue !== String(item.unit_value) && save("unit_value", Number(unitValue))}
-          className="w-20 text-sm border border-transparent hover:border-gray-200 focus:border-[#004aad] rounded px-2 py-1 focus:outline-none text-right"
-        />
-      </td>
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          onBlur={() => price !== String(item.price_monthly) && save("price_monthly", Number(price))}
-          className="w-24 text-sm border border-transparent hover:border-gray-200 focus:border-[#004aad] rounded px-2 py-1 focus:outline-none text-right"
-        />
-      </td>
-      <td className="px-4 py-2">
-        {saving && (
-          <span className="text-xs text-gray-400">saving…</span>
-        )}
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => title !== item.title && save({ title })}
+            className="w-full font-medium text-sm text-gray-900 border-b border-transparent hover:border-gray-300 focus:border-[#004aad] bg-transparent focus:outline-none pb-0.5"
+          />
+          <p className="text-xs text-gray-400 mt-0.5">
+            {item.service_categories?.name ?? "—"} · {item.frequency_label}
+          </p>
+        </div>
         <button
           onClick={() => onDelete(item.id)}
-          className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
+          className="text-gray-300 hover:text-red-500 transition-colors mt-0.5 flex-shrink-0"
         >
-          <Trash2 size={14} />
+          <Trash2 size={15} />
         </button>
-      </td>
-    </tr>
+      </div>
+
+      {/* Fields */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {/* Unit stepper */}
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">
+            {getUnitDisplayName(item.unit_type)}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => stepUnit(-1)}
+              disabled={unitValue <= minUnit}
+              className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Minus size={12} className="text-gray-700" />
+            </button>
+            <span className="text-sm font-semibold text-gray-900 min-w-[4rem] text-center">
+              {formatUnitValue(unitValue, item.unit_type)}
+            </span>
+            <button
+              onClick={() => stepUnit(1)}
+              disabled={unitValue >= maxUnit}
+              className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Plus size={12} className="text-gray-700" />
+            </button>
+          </div>
+        </div>
+
+        {/* Start time */}
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">Start Time</p>
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            onBlur={() =>
+              startTime !== (item.preferred_start_time ?? "") &&
+              save({ preferred_start_time: startTime || null })
+            }
+            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+          />
+          {endTime && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              → {endTime} · {durationMins} min
+            </p>
+          )}
+        </div>
+
+        {/* Provider */}
+        <div className="col-span-2 sm:col-span-1">
+          <p className="text-xs text-gray-500 mb-1.5">Provider</p>
+          <select
+            value={providerId}
+            onChange={(e) => {
+              setProviderId(e.target.value);
+              save({ preferred_provider_id: e.target.value || null });
+            }}
+            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+          >
+            <option value="">— None —</option>
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.provider_type
+                  ? ` · ${p.provider_type.replace(/_/g, " ")}`
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Computed price */}
+      <div className="pt-2 border-t border-gray-50 flex flex-wrap items-baseline gap-2">
+        <span className="text-base font-bold text-gray-900">
+          {formatCurrency(effective)}
+        </span>
+        {base !== effective && (
+          <span className="text-sm text-gray-400 line-through">
+            {formatCurrency(base)}
+          </span>
+        )}
+        <span className="text-xs text-gray-500">/ month</span>
+        {discountPct > 0 && base !== effective && (
+          <span className="text-xs text-green-600 font-medium">
+            {Math.round(discountPct * 100)}% off
+          </span>
+        )}
+        {saving && (
+          <span className="text-xs text-gray-400 ml-auto">saving…</span>
+        )}
+      </div>
+      {insight && (
+        <p className="text-xs text-gray-400">{insight}</p>
+      )}
+    </div>
   );
 }
 
+/** Compact read-only table row. */
 function ReadOnlyItemRow({ item }: { item: PlanItem }) {
   return (
     <tr className="border-b border-gray-100">
       <td className="px-4 py-2.5 text-sm text-gray-800">{item.title}</td>
-      <td className="px-4 py-2.5 text-xs text-gray-500">{item.service_categories?.name ?? "—"}</td>
+      <td className="px-4 py-2.5 text-xs text-gray-500">
+        {item.service_categories?.name ?? "—"}
+      </td>
       <td className="px-4 py-2.5 text-xs text-gray-500">{item.frequency_label}</td>
-      <td className="px-4 py-2.5 text-sm text-gray-700 text-right">{item.unit_value}</td>
-      <td className="px-4 py-2.5 text-sm text-gray-700 text-right">₹{item.price_monthly}</td>
+      <td className="px-4 py-2.5 text-sm text-gray-700 text-right">
+        {formatUnitValue(item.unit_value, item.unit_type)}
+      </td>
+      <td className="px-4 py-2.5 text-sm text-gray-700 text-right">
+        {formatCurrency(item.price_monthly)}
+      </td>
     </tr>
   );
 }
 
-function ItemsTable({
-  items,
-  editable = false,
-  onUpdate,
-  onDelete,
-}: {
-  items: PlanItem[];
-  editable?: boolean;
-  onUpdate?: (id: string, field: string, value: string | number) => void;
-  onDelete?: (id: string) => void;
-}) {
+/** Compact read-only table (for non-editable statuses). */
+function ItemsTable({ items }: { items: PlanItem[] }) {
   const total = items.reduce((s, i) => s + (i.price_monthly ?? 0), 0);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-gray-50 border-b border-gray-100">
-            <th className="text-left px-4 py-2.5 font-medium text-gray-600">Service</th>
-            <th className="text-left px-4 py-2.5 font-medium text-gray-600">Category</th>
-            <th className="text-left px-4 py-2.5 font-medium text-gray-600">Frequency</th>
-            <th className="text-right px-4 py-2.5 font-medium text-gray-600">Units</th>
-            <th className="text-right px-4 py-2.5 font-medium text-gray-600">Price/mo</th>
-            {editable && <th className="px-4 py-2.5" />}
+            <th className="text-left px-4 py-2.5 font-medium text-gray-600">
+              Service
+            </th>
+            <th className="text-left px-4 py-2.5 font-medium text-gray-600">
+              Category
+            </th>
+            <th className="text-left px-4 py-2.5 font-medium text-gray-600">
+              Frequency
+            </th>
+            <th className="text-right px-4 py-2.5 font-medium text-gray-600">
+              Units
+            </th>
+            <th className="text-right px-4 py-2.5 font-medium text-gray-600">
+              Price/mo
+            </th>
           </tr>
         </thead>
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td colSpan={editable ? 6 : 5} className="px-4 py-6 text-center text-gray-500">
-                No items added yet
+              <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                No items
               </td>
             </tr>
           ) : (
-            items.map((item) =>
-              editable && onUpdate && onDelete ? (
-                <EditableItemRow key={item.id} item={item} onUpdate={onUpdate} onDelete={onDelete} />
-              ) : (
-                <ReadOnlyItemRow key={item.id} item={item} />
-              )
-            )
+            items.map((item) => <ReadOnlyItemRow key={item.id} item={item} />)
           )}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-gray-200">
-            <td colSpan={editable ? 4 : 4} className="px-4 py-2.5 text-sm font-medium text-gray-700">
+            <td colSpan={4} className="px-4 py-2.5 text-sm font-medium text-gray-700">
               Total
             </td>
             <td className="px-4 py-2.5 text-sm font-semibold text-gray-900 text-right">
-              ₹{total.toFixed(2)}
+              {formatCurrency(total)}
             </td>
-            {editable && <td />}
           </tr>
         </tfoot>
       </table>
@@ -357,6 +555,7 @@ export default function PlanDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+  const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [showCatalog, setShowCatalog] = useState(false);
 
   // Panel-specific state
@@ -395,6 +594,10 @@ export default function PlanDetailPage() {
       .then((r) => r.json())
       .then((d) => setSupervisors(d.staff ?? []))
       .catch(() => {});
+    fetch("/api/admin/providers")
+      .then((r) => r.json())
+      .then((d) => setProviders(d.providers ?? []))
+      .catch(() => {});
   }, [loadPlan]);
 
   async function patchPlan(body: Record<string, unknown>) {
@@ -418,10 +621,14 @@ export default function PlanDetailPage() {
         job_code: job.code,
         title: job.name,
         unit_value: job.default_unit,
-        price_monthly: 0,
         frequency_label: job.frequency_label,
         unit_type: job.unit_type,
         formula_type: job.formula_type,
+        // Pricing params — server computes price_monthly from formula
+        base_rate_per_unit: job.base_rate_per_unit,
+        instances_per_month: job.instances_per_month,
+        discount_pct: job.discount_pct,
+        time_multiple: job.time_multiple ?? null,
       }),
     });
     const data = await res.json();
@@ -429,14 +636,15 @@ export default function PlanDetailPage() {
     else loadPlan();
   }
 
-  async function handleUpdateItem(id: string, field: string, value: string | number) {
+  async function handleUpdateItem(id: string, updates: Record<string, unknown>) {
     const res = await fetch(`/api/admin/plan-requests/${planId}/items/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
+      body: JSON.stringify(updates),
     });
     const data = await res.json();
     if (data.error) setActionError(data.error);
+    // Reload to sync total and reflect server-computed prices
     else loadPlan();
   }
 
@@ -629,12 +837,35 @@ export default function PlanDetailPage() {
                 <Plus size={14} /> Add Service
               </button>
             </div>
-            <ItemsTable
-              items={items}
-              editable
-              onUpdate={handleUpdateItem}
-              onDelete={handleDeleteItem}
-            />
+            {/* Editable cards with stepper, start time, provider, formula price */}
+            <div className="p-4 space-y-3">
+              {items.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No items added yet — click &quot;Add Service&quot; to begin.
+                </p>
+              ) : (
+                items.map((item) => (
+                  <EditableItemCard
+                    key={item.id}
+                    item={item}
+                    providers={providers}
+                    onUpdate={handleUpdateItem}
+                    onDelete={handleDeleteItem}
+                  />
+                ))
+              )}
+              {items.length > 0 && (
+                <div className="pt-2 flex justify-between items-center text-sm font-semibold text-gray-800 border-t border-gray-100">
+                  <span>Total</span>
+                  <span>
+                    {formatCurrency(
+                      items.reduce((s, i) => s + (i.price_monthly ?? 0), 0)
+                    )}{" "}
+                    / mo
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">

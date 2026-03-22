@@ -21,7 +21,7 @@ export async function GET(
         `*, customers(id, name, phone, customer_profiles(*)),
          assigned_supervisor:staff_accounts!plan_requests_assigned_supervisor_id_fkey(id, name, phone),
          payments(id, amount, status, created_at),
-         plan_request_items(*, service_categories(slug, name), service_jobs(slug, name, code))`
+         plan_request_items(*, service_categories(slug, name), service_jobs(slug, name, code, min_unit, max_unit, unit_interval))`
       )
       .eq("id", planRequestId)
       .single();
