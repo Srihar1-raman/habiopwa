@@ -37,8 +37,14 @@ function tomorrow(): string {
 }
 
 function daysBetween(start: string, end: string): number {
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  return Math.round(ms / (1000 * 60 * 60 * 24));
+  // Parse as UTC to avoid timezone-dependent results
+  const startMs = Date.UTC(
+    Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))
+  );
+  const endMs = Date.UTC(
+    Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, Number(end.slice(8, 10))
+  );
+  return Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
 }
 
 export default function PauseRequestPage() {
@@ -264,6 +270,11 @@ export default function PauseRequestPage() {
                       <p className="text-xs text-[#004aad] font-medium">
                         Duration: {durationDays} {durationDays === 1 ? "day" : "days"}
                       </p>
+                    </div>
+                  )}
+                  {startDate && endDate && durationDays <= 0 && (
+                    <div className="bg-red-50 rounded-xl px-3 py-2">
+                      <p className="text-xs text-red-600">End date must be after start date.</p>
                     </div>
                   )}
                 </div>

@@ -40,6 +40,7 @@ interface AllocationFormState {
   allocated_end_time: string;
 }
 
+/** Parses a time preference string like "10:00-11:00" into start/end times. Returns null for named preferences (morning/afternoon/etc). */
 function parseTimePreference(pref: string | null): { start: string; end: string } | null {
   if (!pref) return null;
   const match = pref.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
