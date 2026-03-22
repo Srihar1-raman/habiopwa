@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, ChevronDown, X, ChevronLeft } from "lucide-react";
+import { Plus, Search, ChevronDown, X, ChevronLeft, UserCog, Wrench } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -304,8 +304,10 @@ export default function StaffManagementPage() {
   const supervisors = allStaff.filter((s) => s.role === "supervisor" && s.status === "active");
   const managers = allStaff.filter((s) => s.role === "manager" && s.status === "active");
   const opsLeads = allStaff.filter((s) => s.role === "ops_lead" && s.status === "active");
+  const admins = allStaff.filter((s) => s.role === "admin" && s.status === "active");
 
   function reportsToOptions() {
+    if (modal.role === "ops_lead") return admins;
     if (modal.role === "supervisor") return managers;
     if (modal.role === "manager") return opsLeads;
     return [];
@@ -393,21 +395,31 @@ export default function StaffManagementPage() {
   function renderStep() {
     if (modal.flow === null) {
       return (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600 mb-2">Who are you adding?</p>
+        <div className="space-y-2.5">
+          <p className="text-sm text-gray-500 mb-3">Select the type of person you are adding.</p>
           <button
             onClick={() => setModal((m) => ({ ...m, flow: "staff", step: 0 }))}
-            className="w-full border-2 border-[#004aad] text-[#004aad] rounded-xl py-4 font-semibold text-sm hover:bg-blue-50 transition-colors"
+            className="w-full flex items-center gap-4 px-4 py-4 border border-gray-200 rounded-xl bg-white hover:border-[#004aad] hover:bg-blue-50 transition-colors text-left"
           >
-            👔 Staff Member
-            <p className="text-xs font-normal text-gray-500 mt-1">Ops Lead, Manager, or Supervisor</p>
+            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+              <UserCog className="w-5 h-5 text-[#004aad]" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Staff Member</p>
+              <p className="text-xs text-gray-500 mt-0.5">Ops Lead, Manager, or Supervisor</p>
+            </div>
           </button>
           <button
             onClick={() => setModal((m) => ({ ...m, flow: "provider", step: 0 }))}
-            className="w-full border-2 border-purple-500 text-purple-700 rounded-xl py-4 font-semibold text-sm hover:bg-purple-50 transition-colors"
+            className="w-full flex items-center gap-4 px-4 py-4 border border-gray-200 rounded-xl bg-white hover:border-purple-500 hover:bg-purple-50 transition-colors text-left"
           >
-            🧹 Service Provider
-            <p className="text-xs font-normal text-gray-500 mt-1">Housekeeping, Kitchen, Technician, etc.</p>
+            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+              <Wrench className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Service Provider</p>
+              <p className="text-xs text-gray-500 mt-0.5">Housekeeping, Kitchen, Technician, etc.</p>
+            </div>
           </button>
         </div>
       );
@@ -505,6 +517,41 @@ export default function StaffManagementPage() {
         );
       case 4: {
         const reportOptions = reportsToOptions();
+        // Ops Lead → reports to Admin only, no location
+        if (modal.role === "ops_lead") {
+          return (
+            <Field label="Reports To (Admin)">
+              <select
+                value={modal.reportsTo}
+                onChange={(e) => setModal((m) => ({ ...m, reportsTo: e.target.value }))}
+                className={selectCls}
+              >
+                <option value="">— None —</option>
+                {reportOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </Field>
+          );
+        }
+        // Manager → reports to Ops Lead only, no location
+        if (modal.role === "manager") {
+          return (
+            <Field label="Reports To (Ops Lead)">
+              <select
+                value={modal.reportsTo}
+                onChange={(e) => setModal((m) => ({ ...m, reportsTo: e.target.value }))}
+                className={selectCls}
+              >
+                <option value="">— None —</option>
+                {reportOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </Field>
+          );
+        }
+        // Supervisor → location + reports to Manager
         return (
           <div className="space-y-3">
             <Field label="Location">
@@ -519,20 +566,18 @@ export default function StaffManagementPage() {
                 ))}
               </select>
             </Field>
-            {modal.role !== "ops_lead" && (
-              <Field label={modal.role === "supervisor" ? "Reports To (Manager)" : "Reports To (Ops Lead)"}>
-                <select
-                  value={modal.reportsTo}
-                  onChange={(e) => setModal((m) => ({ ...m, reportsTo: e.target.value }))}
-                  className={selectCls}
-                >
-                  <option value="">— None —</option>
-                  {reportOptions.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </Field>
-            )}
+            <Field label="Reports To (Manager)">
+              <select
+                value={modal.reportsTo}
+                onChange={(e) => setModal((m) => ({ ...m, reportsTo: e.target.value }))}
+                className={selectCls}
+              >
+                <option value="">— None —</option>
+                {reportOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </Field>
           </div>
         );
       }
