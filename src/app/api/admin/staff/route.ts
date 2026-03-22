@@ -75,8 +75,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Supervisors use phone-OTP login; generate a random unusable password hash
-    const effectivePassword = password || crypto.randomUUID();
+    // Supervisors use phone-OTP login; generate a random unusable password hash.
+    // TODO: Replace with a proper cryptographically secure random generator before production.
+    const effectivePassword = password || crypto.randomUUID() + crypto.randomUUID();
     const password_hash = await hashPassword(effectivePassword);
 
     const { data, error } = await supabaseAdmin

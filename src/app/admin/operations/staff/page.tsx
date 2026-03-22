@@ -100,6 +100,7 @@ const FILTER_OPTIONS = [
   { value: "inactive", label: "Inactive" },
 ];
 
+// TODO: Replace with real OTP generation/delivery before production.
 const HARDCODED_OTP = "1234";
 
 // ─── Input helper ─────────────────────────────────────────────────────────────
