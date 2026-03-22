@@ -2,15 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getStaffFromRequest } from "@/lib/staff-session";
 
-function generateRequestCode(): string {
+async function generateUniqueRequestCode(): Promise<string> {
   const date = new Date();
   const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, "");
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let rand = "";
-  for (let i = 0; i < 4; i++) {
-    rand += chars[Math.floor(Math.random() * chars.length)];
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let rand = "";
+    for (let i = 0; i < 4; i++) {
+      rand += chars[Math.floor(Math.random() * chars.length)];
+    }
+    const code = `HB-${yyyymmdd}-${rand}`;
+    const { data } = await supabaseAdmin
+      .from("plan_requests")
+      .select("id")
+      .eq("request_code", code)
+      .maybeSingle();
+    if (!data) return code;
   }
-  return `HB-${yyyymmdd}-${rand}`;
+  throw new Error("Failed to generate a unique request code after 10 attempts");
 }
 
 export async function POST(req: NextRequest) {
@@ -38,7 +48,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
 
-    const request_code = generateRequestCode();
+    const request_code = await generateUniqueRequestCode();
 
     const { data: planRequest, error: insertError } = await supabaseAdmin
       .from("plan_requests")

@@ -367,6 +367,7 @@ export default function PlanDetailPage() {
   const [preferredDate, setPreferredDate] = useState("");
   const [savingDate, setSavingDate] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadPlan = useCallback(async () => {
     if (!planId) return;
@@ -407,6 +408,7 @@ export default function PlanDetailPage() {
 
   async function handleAddService(job: ServiceJob) {
     setShowCatalog(false);
+    setActionError(null);
     const res = await fetch(`/api/admin/plan-requests/${planId}/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -423,7 +425,7 @@ export default function PlanDetailPage() {
       }),
     });
     const data = await res.json();
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
@@ -434,7 +436,7 @@ export default function PlanDetailPage() {
       body: JSON.stringify({ [field]: value }),
     });
     const data = await res.json();
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
@@ -444,54 +446,59 @@ export default function PlanDetailPage() {
       method: "DELETE",
     });
     const data = await res.json();
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
   async function handleSubmitPlan() {
     setActionLoading(true);
+    setActionError(null);
     // Save date first if set
     if (preferredDate) {
       await patchPlan({ preferred_start_date: preferredDate });
     }
     const data = await patchPlan({ status: "submitted" });
     setActionLoading(false);
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
   async function handleAllocateSupervisor() {
     if (!selectedSupervisor) return;
     setAllocating(true);
+    setActionError(null);
     const data = await patchPlan({ assigned_supervisor_id: selectedSupervisor });
     setAllocating(false);
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
   async function handleSaveRemarks() {
     setSavingRemarks(true);
+    setActionError(null);
     const data = await patchPlan({ admin_remarks: adminRemarks });
     setSavingRemarks(false);
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
   async function handleFinalize() {
     if (!confirm("Finalize plan and move to payment pending?")) return;
     setActionLoading(true);
+    setActionError(null);
     const res = await fetch(`/api/admin/plan-requests/${planId}/finalize`, {
       method: "POST",
     });
     const data = await res.json();
     setActionLoading(false);
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
   async function handleMarkPaymentReceived() {
     if (!confirm("Mark this plan as active and payment as received?")) return;
     setActionLoading(true);
+    setActionError(null);
     const payment = unwrap(plan?.payments ?? null) ?? (plan?.payments ?? [])[0];
     try {
       // Mark plan active
@@ -506,7 +513,7 @@ export default function PlanDetailPage() {
       }
       loadPlan();
     } catch {
-      alert("Failed to update");
+      setActionError("Failed to update");
     } finally {
       setActionLoading(false);
     }
@@ -514,9 +521,10 @@ export default function PlanDetailPage() {
 
   async function handleSaveDate() {
     setSavingDate(true);
+    setActionError(null);
     const data = await patchPlan({ preferred_start_date: preferredDate });
     setSavingDate(false);
-    if (data.error) alert(data.error);
+    if (data.error) setActionError(data.error);
     else loadPlan();
   }
 
@@ -562,6 +570,16 @@ export default function PlanDetailPage() {
       >
         <ArrowLeft size={15} /> Back to customer
       </button>
+
+      {/* Inline action error banner */}
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-red-700">{actionError}</p>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 ml-3">
+            <X size={15} />
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm p-5">
