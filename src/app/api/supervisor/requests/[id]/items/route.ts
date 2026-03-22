@@ -50,9 +50,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (planRequest.status === "active" || planRequest.status === "cancelled") {
+  if (planRequest.status === "active" || planRequest.status === "cancelled" || planRequest.status === "closed") {
     return NextResponse.json(
-      { error: "Cannot modify an active or cancelled request" },
+      { error: "Cannot modify an active, cancelled, or closed request" },
       { status: 400 }
     );
   }
