@@ -20,7 +20,7 @@ export async function POST(
 
   if (!leave_start_date || !leave_end_date || !leave_type) {
     return NextResponse.json(
-      { error: "start_date, end_date, and leave_type are required" },
+      { error: "start_date (or leave_start_date), end_date (or leave_end_date), and leave_type are required" },
       { status: 400 }
     );
   }
