@@ -58,21 +58,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const staff = await getStaffFromRequest();
-    if (!staff || staff.role !== "admin") {
+    if (!staff || !["admin", "ops_lead", "manager"].includes(staff.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
-    const { name, email, phone, role, password, location_id, reports_to } = body;
+    const {
+      name, email, phone, role, password,
+      location_id, reports_to, aadhaar, address, permanent_address,
+    } = body;
 
-    if (!name || !phone || !role || !password) {
+    if (!name || !phone || !role) {
       return NextResponse.json(
-        { error: "name, phone, role, and password are required" },
+        { error: "name, phone, and role are required" },
         { status: 400 }
       );
     }
 
-    const password_hash = await hashPassword(password);
+    // Supervisors use phone-OTP login; generate a random unusable password hash
+    const effectivePassword = password || crypto.randomUUID();
+    const password_hash = await hashPassword(effectivePassword);
 
     const { data, error } = await supabaseAdmin
       .from("staff_accounts")
@@ -85,6 +90,9 @@ export async function POST(req: NextRequest) {
         status: "active",
         location_id: location_id || null,
         reports_to: reports_to || null,
+        aadhaar: aadhaar || null,
+        address: address || null,
+        permanent_address: permanent_address || null,
       })
       .select("id, name, email, phone, role, status")
       .single();

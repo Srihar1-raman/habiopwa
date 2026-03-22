@@ -331,6 +331,7 @@ CREATE TABLE service_providers (
   aadhaar           text,
   address           text,
   permanent_address text,
+  notes             text,
   location_id       uuid REFERENCES locations(id),
   created_at        timestamptz DEFAULT now(),
   updated_at        timestamptz DEFAULT now()
