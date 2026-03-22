@@ -13,24 +13,38 @@ export async function GET(
   }
 
   const providerIds = await getSupervisorProviderIds(staff.id);
-  if (providerIds.length === 0) {
-    return NextResponse.json({ allocations: [], date: (await params).date });
-  }
-
   const { date } = await params;
 
-  const { data, error } = await supabaseAdmin
-    .from("job_allocations")
-    .select(
-      "*, service_providers(name, provider_type), plan_request_items(title), customers(name, customer_profiles(flat_no, society))"
-    )
-    .eq("scheduled_date", date)
-    .in("service_provider_id", providerIds)
-    .order("scheduled_start_time", { ascending: true });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (providerIds.length === 0) {
+    return NextResponse.json({ allocations: [], onDemand: [], date });
   }
 
-  return NextResponse.json({ allocations: data ?? [], date });
+  const [allocResult, onDemandResult] = await Promise.all([
+    supabaseAdmin
+      .from("job_allocations")
+      .select(
+        "*, service_providers(name, provider_type), plan_request_items(title), customers(name, customer_profiles(flat_no, society))"
+      )
+      .eq("scheduled_date", date)
+      .in("service_provider_id", providerIds)
+      .order("scheduled_start_time", { ascending: true }),
+    supabaseAdmin
+      .from("on_demand_requests")
+      .select(
+        "id, allocated_date, allocated_start_time, allocated_end_time, status, service_providers(name), customers(name), service_jobs(name)"
+      )
+      .eq("allocated_date", date)
+      .in("service_provider_id", providerIds)
+      .order("allocated_start_time", { ascending: true }),
+  ]);
+
+  if (allocResult.error) {
+    return NextResponse.json({ error: allocResult.error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    allocations: allocResult.data ?? [],
+    onDemand: onDemandResult.data ?? [],
+    date,
+  });
 }

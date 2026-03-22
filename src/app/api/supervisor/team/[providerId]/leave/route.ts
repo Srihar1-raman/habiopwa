@@ -13,11 +13,14 @@ export async function POST(
 
   const { providerId } = await params;
   const body = await req.json();
-  const { leave_start_date, leave_end_date, leave_type } = body;
+  // Accept both naming conventions for dates
+  const leave_start_date = body.start_date ?? body.leave_start_date;
+  const leave_end_date = body.end_date ?? body.leave_end_date;
+  const { leave_type, status } = body;
 
   if (!leave_start_date || !leave_end_date || !leave_type) {
     return NextResponse.json(
-      { error: "leave_start_date, leave_end_date, and leave_type are required" },
+      { error: "start_date, end_date, and leave_type are required" },
       { status: 400 }
     );
   }
@@ -29,6 +32,7 @@ export async function POST(
       leave_start_date,
       leave_end_date,
       leave_type,
+      ...(status ? { status } : {}),
     })
     .select()
     .single();
