@@ -2,6 +2,81 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getStaffFromRequest } from "@/lib/staff-session";
 
+export async function POST(req: NextRequest) {
+  try {
+    const staff = await getStaffFromRequest();
+    if (!staff || !["admin", "ops_lead", "manager"].includes(staff.role)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const {
+      phone, name,
+      flat_no, building, society, sector, city, pincode,
+      home_type, bhk, bathrooms, balconies, cars, plants,
+      diet_pref, people_count,
+    } = body;
+
+    if (!phone || !name || !flat_no) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Check if customer already exists
+    const { data: existing } = await supabaseAdmin
+      .from("customers")
+      .select("id")
+      .eq("phone", phone)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({ error: "Customer already exists" }, { status: 409 });
+    }
+
+    // Create customer
+    const { data: customer, error: customerError } = await supabaseAdmin
+      .from("customers")
+      .insert({ phone, name })
+      .select("id")
+      .single();
+
+    if (customerError || !customer) {
+      return NextResponse.json({ error: customerError?.message ?? "Failed to create customer" }, { status: 500 });
+    }
+
+    // Create customer profile
+    const { error: profileError } = await supabaseAdmin
+      .from("customer_profiles")
+      .insert({
+        customer_id: customer.id,
+        flat_no,
+        building: building || null,
+        society: society || null,
+        sector: sector || null,
+        city: city || null,
+        pincode: pincode || null,
+        home_type: home_type || null,
+        bhk: bhk ? Number(bhk) : null,
+        bathrooms: bathrooms ? Number(bathrooms) : null,
+        balconies: balconies !== undefined && balconies !== null ? Number(balconies) : null,
+        cars: cars !== undefined && cars !== null ? Number(cars) : 0,
+        plants: plants !== undefined && plants !== null ? Number(plants) : 0,
+        diet_pref: diet_pref || null,
+        people_count: people_count ? Number(people_count) : null,
+      });
+
+    if (profileError) {
+      // Rollback: delete the customer we just created
+      await supabaseAdmin.from("customers").delete().eq("id", customer.id);
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ customerId: customer.id }, { status: 201 });
+  } catch (err) {
+    console.error("Create customer error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const staff = await getStaffFromRequest();
