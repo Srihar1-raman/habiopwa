@@ -16,6 +16,8 @@ import {
   Home,
   Sparkles,
   ShieldCheck,
+  Users,
+  History,
 } from "lucide-react";
 
 interface PlanItem {
@@ -50,6 +52,20 @@ interface Job {
   service_providers: { name: string; provider_type: string | null } | null;
 }
 
+interface HistoryJob {
+  id: string;
+  scheduled_date: string;
+  scheduled_start_time: string | null;
+  status: string;
+  plan_request_items: { title: string } | null;
+  service_providers: { name: string } | null;
+}
+
+interface Provider {
+  id: string;
+  name: string;
+}
+
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
   scheduled:            { label: "Scheduled",          color: "bg-blue-50 text-blue-700",    dot: "bg-blue-500" },
   scheduled_delayed:    { label: "Delayed",             color: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
@@ -61,6 +77,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
   service_on_pause:     { label: "Paused",              color: "bg-purple-50 text-purple-700",dot: "bg-purple-500" },
   incomplete:           { label: "Incomplete",          color: "bg-gray-100 text-gray-600",   dot: "bg-gray-400" },
   cancelled:            { label: "Cancelled",           color: "bg-red-50 text-red-600",      dot: "bg-red-500" },
+  missed:               { label: "Missed",              color: "bg-gray-100 text-gray-500",   dot: "bg-gray-400" },
   status_not_marked:    { label: "Not Marked",          color: "bg-gray-100 text-gray-600",   dot: "bg-gray-400" },
 };
 
@@ -103,6 +120,12 @@ function getLocalDateStr() {
   return `${year}-${month}-${day}`;
 }
 
+function subtractDays(dateStr: string, days: number) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function formatDateLabel(dateStr: string) {
   const today = getLocalDateStr();
   const tomorrow = (() => {
@@ -122,8 +145,12 @@ export default function PlanActivePage() {
   const [planRequest, setPlanRequest] = useState<PlanRequest | null>(null);
   const [todayJobs, setTodayJobs] = useState<Job[]>([]);
   const [upcomingJobs, setUpcomingJobs] = useState<Job[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [historyJobs, setHistoryJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeBanner, setActiveBanner] = useState(0);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [historyDateFilter, setHistoryDateFilter] = useState("");
   const bannerTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-rotate banners every 4 seconds
@@ -136,7 +163,6 @@ export default function PlanActivePage() {
 
   useEffect(() => {
     const today = getLocalDateStr();
-    // Build next 7 days for upcoming
     const futureDates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today + "T00:00:00");
       d.setDate(d.getDate() + i + 1);
@@ -146,14 +172,19 @@ export default function PlanActivePage() {
     Promise.all([
       fetch("/api/plan/current").then((r) => r.json()),
       fetch(`/api/customer/jobs/${today}`).then((r) => r.json()),
-      ...futureDates.map((d) =>
-        fetch(`/api/customer/jobs/${d}`).then((r) => r.json())
-      ),
-    ]).then(([planData, todayData, ...futureData]) => {
+      ...futureDates.map((d) => fetch(`/api/customer/jobs/${d}`).then((r) => r.json())),
+      fetch("/api/customer/providers").then((r) => r.json()),
+      fetch("/api/customer/jobs/history").then((r) => r.json()),
+    ]).then(([planData, todayData, ...rest]) => {
+      const futureData = rest.slice(0, futureDates.length);
+      const providersData = rest[futureDates.length];
+      const historyData = rest[futureDates.length + 1];
+
       setPlanRequest(planData.planRequest ?? null);
       setTodayJobs(todayData.jobs ?? []);
-      const upcoming = futureData.flatMap((d) => d.jobs ?? []);
-      setUpcomingJobs(upcoming);
+      setUpcomingJobs(futureData.flatMap((d: { jobs?: Job[] }) => d.jobs ?? []));
+      setProviders(providersData.providers ?? []);
+      setHistoryJobs(historyData.jobs ?? []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -182,12 +213,22 @@ export default function PlanActivePage() {
   }
 
   const banner = BANNERS[activeBanner];
-
-  // Group today's jobs by status
   const hasTodayJobs = todayJobs.length > 0;
   const activeJobs = todayJobs.filter((j) => ["scheduled", "scheduled_delayed", "in_progress", "in_progress_delayed"].includes(j.status));
   const completedJobs = todayJobs.filter((j) => j.status.startsWith("completed"));
   const cancelledJobs = todayJobs.filter((j) => ["cancelled_by_customer", "service_on_pause", "incomplete", "cancelled", "status_not_marked"].includes(j.status));
+
+  // Recent jobs for "last 3 days"
+  const today = getLocalDateStr();
+  const threeDaysAgo = subtractDays(today, 2);
+  const recentHistory = historyJobs.filter(
+    (j) => j.scheduled_date >= threeDaysAgo && j.scheduled_date <= today
+  );
+  const filteredHistory = historyDateFilter
+    ? historyJobs.filter((j) => j.scheduled_date === historyDateFilter)
+    : showAllHistory
+    ? historyJobs
+    : recentHistory;
 
   return (
     <div className="flex flex-col min-h-dvh pb-10">
@@ -311,8 +352,6 @@ export default function PlanActivePage() {
                 </div>
               );
             })}
-
-            {/* Counts row */}
             {(activeJobs.length > 0 || completedJobs.length > 0 || cancelledJobs.length > 0) && (
               <div className="flex gap-2 mt-1 flex-wrap">
                 {activeJobs.length > 0 && (
@@ -331,6 +370,102 @@ export default function PlanActivePage() {
                   </span>
                 )}
               </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Card A — My Providers */}
+      {providers.length > 0 && (
+        <div className="px-4 mt-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-[#004aad]" />
+            <h2 className="text-base font-semibold text-gray-900">My Providers</h2>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+            {providers.map((p) => (
+              <div key={p.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{p.name}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Card B — Recent Jobs */}
+      <div className="px-4 mt-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-[#004aad]" />
+            <h2 className="text-base font-semibold text-gray-900">
+              {showAllHistory || historyDateFilter ? "Job History" : "Recent Jobs"}
+            </h2>
+          </div>
+          <input
+            type="date"
+            value={historyDateFilter}
+            onChange={(e) => { setHistoryDateFilter(e.target.value); setShowAllHistory(false); }}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#004aad]/30"
+          />
+        </div>
+
+        {filteredHistory.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center text-gray-400 text-sm">
+            No jobs in this period
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+            {filteredHistory.map((job) => {
+              const cfg = STATUS_CONFIG[job.status] ?? { label: job.status, color: "bg-gray-100 text-gray-600", dot: "bg-gray-400" };
+              return (
+                <div key={job.id} className="flex items-start justify-between px-4 py-3 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {job.plan_request_items?.title ?? "Service"}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-400">
+                      <span>
+                        {new Date(job.scheduled_date + "T00:00:00").toLocaleDateString("en-IN", {
+                          day: "numeric", month: "short",
+                        })}
+                      </span>
+                      {job.scheduled_start_time && (
+                        <>
+                          <span>·</span>
+                          <span>{formatTime(job.scheduled_start_time)}</span>
+                        </>
+                      )}
+                      {job.service_providers?.name && (
+                        <>
+                          <span>·</span>
+                          <span className="truncate">{job.service_providers.name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cfg.color}`}>
+                    {cfg.label}
+                  </span>
+                </div>
+              );
+            })}
+            {!showAllHistory && !historyDateFilter && historyJobs.length > recentHistory.length && (
+              <button
+                onClick={() => setShowAllHistory(true)}
+                className="w-full px-4 py-3 text-xs text-[#004aad] font-semibold text-center hover:bg-blue-50 flex items-center justify-center gap-1"
+              >
+                See all {historyJobs.length} jobs <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {(showAllHistory || historyDateFilter) && (
+              <button
+                onClick={() => { setShowAllHistory(false); setHistoryDateFilter(""); }}
+                className="w-full px-4 py-3 text-xs text-gray-500 text-center hover:bg-gray-50"
+              >
+                Show less
+              </button>
             )}
           </div>
         )}
