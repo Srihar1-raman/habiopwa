@@ -29,9 +29,8 @@ interface ProviderDetail {
   id: string;
   name: string;
   phone: string | null;
-  specialization: string | null;
+  provider_type: string | null;
   status: string;
-  is_active: boolean;
 }
 
 export default function ProviderDetailPage() {
@@ -126,15 +125,15 @@ export default function ProviderDetailPage() {
             <p className="text-lg font-bold text-gray-900">{provider.name}</p>
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                provider.is_active ? STATUS_COLORS["active"] : STATUS_COLORS["inactive"]
+                STATUS_COLORS[provider.status] ?? STATUS_COLORS["inactive"]
               }`}
             >
-              {provider.is_active ? provider.status ?? "active" : "inactive"}
+              {provider.status}
             </span>
           </div>
           {provider.phone && <p className="text-sm text-gray-500">{provider.phone}</p>}
-          {provider.specialization && (
-            <p className="text-sm text-gray-500 mt-1">{provider.specialization}</p>
+          {provider.provider_type && (
+            <p className="text-sm text-gray-500 mt-1">{provider.provider_type.replace(/_/g, " ")}</p>
           )}
         </div>
 

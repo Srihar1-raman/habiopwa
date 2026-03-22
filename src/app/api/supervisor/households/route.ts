@@ -14,7 +14,7 @@ export async function GET() {
     .select(
       "id, request_code, status, total_price_monthly, plan_start_date, created_at, updated_at, customers(phone, name, customer_profiles(flat_no, society, sector, city))"
     )
-    .eq("status", "paid")
+    .eq("status", "active")
     .eq("assigned_supervisor_id", staff.id)
     .order("created_at", { ascending: false });
 

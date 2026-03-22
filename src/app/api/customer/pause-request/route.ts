@@ -50,8 +50,7 @@ export async function POST(req: NextRequest) {
       ...(pause_end_date !== undefined && { pause_end_date }),
       ...(pause_duration_unit !== undefined && { pause_duration_unit }),
       ...(pause_duration_value !== undefined && { pause_duration_value }),
-      status: "active",
-      supervisor_approval_status: "pending",
+      status: "pending",
     })
     .select()
     .single();

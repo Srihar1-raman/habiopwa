@@ -8,13 +8,14 @@ const STATUS_COLORS: Record<string, string> = {
   active: "bg-green-100 text-green-700",
   paused: "bg-yellow-100 text-yellow-700",
   cancelled: "bg-red-100 text-red-700",
-  finalized: "bg-blue-100 text-blue-700",
-  paid: "bg-emerald-100 text-emerald-700",
-  completed: "bg-green-100 text-green-700",
+  payment_pending: "bg-blue-100 text-blue-700",
+  captain_review_pending: "bg-orange-100 text-orange-700",
+  captain_allocation_pending: "bg-yellow-100 text-yellow-800",
+  completed: "bg-emerald-100 text-emerald-700",
+  closed: "bg-gray-200 text-gray-700",
   pending: "bg-gray-100 text-gray-600",
   in_progress: "bg-blue-100 text-blue-600",
   submitted: "bg-blue-100 text-blue-800",
-  under_process: "bg-yellow-100 text-yellow-800",
 };
 
 interface JobAllocation {

@@ -26,10 +26,8 @@ const PLAN_STATUS_COLORS: Record<string, string> = {
   active: "bg-green-100 text-green-700",
   paused: "bg-gray-100 text-gray-600",
   completed: "bg-teal-100 text-teal-700",
-  under_process: "bg-blue-100 text-blue-700",
-  finalized: "bg-purple-100 text-purple-700",
-  paid: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-600",
+  closed: "bg-gray-200 text-gray-700",
   cart_in_progress: "bg-amber-100 text-amber-700",
 };
 
@@ -41,10 +39,8 @@ const STATUS_LABELS: Record<string, string> = {
   active: "Active",
   paused: "Paused",
   completed: "Completed",
-  under_process: "Under Process",
-  finalized: "Finalized",
-  paid: "Paid",
   cancelled: "Cancelled",
+  closed: "Closed",
   cart_in_progress: "Cart In Progress",
 };
 
@@ -72,9 +68,6 @@ function PlanActionButton({ customer }: { customer: Customer }) {
       "captain_review_pending",
       "payment_pending",
       "submitted",
-      "under_process",
-      "finalized",
-      "paid",
     ];
     if (actionableStatuses.includes(customer.latest_plan_status)) {
       return (

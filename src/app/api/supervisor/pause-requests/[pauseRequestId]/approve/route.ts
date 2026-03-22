@@ -24,10 +24,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Pause request not found" }, { status: 404 });
   }
 
-  // Approve the pause request
+  // Approve the pause request — update status to 'approved' then 'active'
   const { error: approveError } = await supabaseAdmin
     .from("pause_requests")
-    .update({ supervisor_approval_status: "approved" })
+    .update({ status: "approved" })
     .eq("id", pauseRequestId);
 
   if (approveError) {

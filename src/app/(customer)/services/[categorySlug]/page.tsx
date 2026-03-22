@@ -164,7 +164,7 @@ export default function CategoryPlanPage() {
     fetch("/api/plan/current")
       .then((r) => r.json())
       .then((d) => {
-        setCustomerHasPaid(d.planRequest?.status === "paid");
+        setCustomerHasPaid(d.planRequest?.status === "active");
       })
       .catch(() => setCustomerHasPaid(false));
   }, [categorySlug]);

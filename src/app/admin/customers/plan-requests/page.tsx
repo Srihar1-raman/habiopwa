@@ -17,14 +17,29 @@ interface PlanRequest {
 }
 
 const STATUS_COLORS: Record<string, string> = {
+  cart_in_progress: "bg-gray-100 text-gray-600",
   submitted: "bg-yellow-100 text-yellow-700",
-  under_process: "bg-blue-100 text-blue-700",
-  finalized: "bg-purple-100 text-purple-700",
-  paid: "bg-green-100 text-green-700",
+  captain_allocation_pending: "bg-orange-100 text-orange-700",
+  captain_review_pending: "bg-blue-100 text-blue-700",
+  payment_pending: "bg-purple-100 text-purple-700",
+  active: "bg-green-100 text-green-700",
+  paused: "bg-yellow-100 text-yellow-600",
+  completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-gray-100 text-gray-500",
+  closed: "bg-gray-200 text-gray-700",
 };
 
-const STATUSES = ["submitted", "under_process", "finalized", "paid", "cancelled"];
+const STATUSES = [
+  "submitted",
+  "captain_allocation_pending",
+  "captain_review_pending",
+  "payment_pending",
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+  "closed",
+];
 
 export default function PlanRequestsPage() {
   const [requests, setRequests] = useState<PlanRequest[]>([]);

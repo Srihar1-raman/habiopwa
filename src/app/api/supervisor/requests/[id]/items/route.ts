@@ -50,9 +50,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (planRequest.status === "paid" || planRequest.status === "cancelled") {
+  if (planRequest.status === "active" || planRequest.status === "cancelled") {
     return NextResponse.json(
-      { error: "Cannot modify a paid or cancelled request" },
+      { error: "Cannot modify an active or cancelled request" },
       { status: 400 }
     );
   }
@@ -99,7 +99,7 @@ export async function PATCH(
     .from("plan_requests")
     .update({
       total_price_monthly: total,
-      status: "under_process",
+      status: "captain_review_pending",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

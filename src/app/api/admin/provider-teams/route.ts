@@ -25,7 +25,7 @@ export async function GET() {
       .from("provider_team_assignments")
       .select(
         `id, supervisor_id, assigned_at,
-         service_providers(id, name, phone, specialization, is_active)`
+         service_providers(id, name, phone, provider_type, status)`
       );
 
     if (assignError) {
@@ -35,7 +35,7 @@ export async function GET() {
     // Group assignments by supervisor_id
     const assignmentMap: Record<
       string,
-      { assignmentId: string; provider: { id: string; name: string; phone: string; specialization: string | null; is_active: boolean }; assigned_at: string }[]
+      { assignmentId: string; provider: { id: string; name: string; phone: string; provider_type: string | null; status: string }; assigned_at: string }[]
     > = {};
 
     for (const a of assignments ?? []) {
@@ -52,8 +52,8 @@ export async function GET() {
           id: provider.id,
           name: provider.name,
           phone: provider.phone,
-          specialization: provider.specialization,
-          is_active: provider.is_active,
+          provider_type: provider.provider_type,
+          status: provider.status,
         },
         assigned_at: a.assigned_at,
       });

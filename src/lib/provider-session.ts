@@ -26,7 +26,7 @@ export async function getProviderFromSession(
   id: string;
   phone: string;
   name: string | null;
-  specialization: string | null;
+  provider_type: string | null;
   status: string | null;
 } | null> {
   if (!token) return null;
@@ -34,7 +34,7 @@ export async function getProviderFromSession(
   const { data, error } = await supabaseAdmin
     .from("provider_sessions")
     .select(
-      "service_provider_id, expires_at, service_providers(id, phone, name, specialization, status)"
+      "service_provider_id, expires_at, service_providers(id, phone, name, provider_type, status)"
     )
     .eq("session_token", token)
     .single();
@@ -53,7 +53,7 @@ export async function getProviderFromSession(
     id: string;
     phone: string;
     name: string | null;
-    specialization: string | null;
+    provider_type: string | null;
     status: string | null;
   };
   return provider ?? null;
@@ -63,7 +63,7 @@ export async function getProviderFromRequest(): Promise<{
   id: string;
   phone: string;
   name: string | null;
-  specialization: string | null;
+  provider_type: string | null;
   status: string | null;
 } | null> {
   const cookieStore = await cookies();

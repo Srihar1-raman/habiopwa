@@ -59,13 +59,13 @@ export default function PaymentPage() {
     );
   }
 
-  if (!planRequest || planRequest.status !== "finalized") {
+  if (!planRequest || planRequest.status !== "payment_pending") {
     return (
       <div className="flex flex-col min-h-dvh items-center justify-center px-8 text-center gap-4">
         <Clock className="w-12 h-12 text-amber-400" />
         <h2 className="text-xl font-bold text-gray-900">Not ready yet</h2>
         <p className="text-gray-500">
-          Your plan is being reviewed. Come back once it&apos;s finalized.
+          Your plan is being reviewed. Come back once itYour plan is being reviewed. Come back once it&apos;s finalized.apos;s ready for payment.
         </p>
         <Button onClick={() => router.push("/services")} variant="outline">
           Go Home

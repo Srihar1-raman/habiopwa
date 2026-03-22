@@ -60,7 +60,7 @@ export default function AddServicePage() {
       .then((r) => r.json())
       .then((data) => {
         const planRequest = data.planRequest ?? null;
-        if (planRequest && (planRequest.status === "paid" || planRequest.status === "finalized")) {
+        if (planRequest && (planRequest.status === "active" || planRequest.status === "paused")) {
           setPlan({
             id: planRequest.id,
             status: planRequest.status,

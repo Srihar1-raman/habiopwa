@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Plan not found" }, { status: 404 });
   }
 
-  const allowedStatuses = ["submitted", "under_process", "finalized", "paid"];
+  const allowedStatuses = ["submitted", "captain_allocation_pending", "captain_review_pending", "active"];
   if (!allowedStatuses.includes(plan.status)) {
     return NextResponse.json(
       { ok: false, error: "Plan is not in a state that allows adding services" },
@@ -69,11 +69,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Failed to add services" }, { status: 500 });
   }
 
-  // Only degrade status for plans that aren't yet active (paid/finalized stays as-is)
-  if (plan.status !== "paid" && plan.status !== "finalized") {
+  // Only degrade status for plans that aren't yet active
+  if (plan.status !== "active" && plan.status !== "paused") {
     const { error: updateError } = await supabaseAdmin
       .from("plan_requests")
-      .update({ status: "under_process" })
+      .update({ status: "captain_allocation_pending" })
       .eq("id", plan_request_id);
 
     if (updateError) {

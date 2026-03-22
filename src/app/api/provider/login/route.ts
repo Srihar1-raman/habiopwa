@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
   const { data: provider, error } = await supabaseAdmin
     .from("service_providers")
-    .select("id, name, phone, specialization, status")
+    .select("id, name, phone, provider_type, status")
     .eq("phone", phone)
     .single();
 
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       id: provider.id,
       name: provider.name,
       phone: provider.phone,
-      specialization: provider.specialization,
+      provider_type: provider.provider_type,
       status: provider.status,
     },
   });

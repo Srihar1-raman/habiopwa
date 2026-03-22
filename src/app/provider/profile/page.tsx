@@ -8,7 +8,7 @@ interface Provider {
   id: string;
   name: string;
   phone: string;
-  specialization: string;
+  provider_type: string | null;
   status: string;
 }
 
@@ -99,7 +99,7 @@ export default function ProviderProfilePage() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Specialization</p>
-                  <p className="text-sm font-semibold text-gray-800">{provider.specialization || "—"}</p>
+                  <p className="text-sm font-semibold text-gray-800">{provider.provider_type?.replace(/_/g, ' ') || "—"}</p>
                 </div>
               </div>
 

@@ -87,12 +87,12 @@ export async function PATCH(
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // For paid/finalized plans (addon allocations), keep the plan status unchanged.
-  // Only update to "finalized" for initial plan submissions.
-  if (planRequest.status !== "paid" && planRequest.status !== "finalized") {
+  // For active plans (addon allocations), keep the plan status unchanged.
+  // Only update to "payment_pending" for initial plan submissions.
+  if (planRequest.status !== "active" && planRequest.status !== "paused") {
     const { error: updateError } = await supabaseAdmin
       .from("plan_requests")
-      .update({ status: "finalized" })
+      .update({ status: "payment_pending" })
       .eq("id", planRequestId);
 
     if (updateError) {

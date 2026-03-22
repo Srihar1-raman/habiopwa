@@ -42,13 +42,13 @@ interface Job {
 const STATUS_STYLES: Record<string, string> = {
   scheduled: "bg-blue-700 text-white",
   scheduled_delayed: "bg-orange-500 text-white",
-  ongoing: "bg-amber-400 text-white",
-  ongoing_delayed: "bg-orange-600 text-white",
+  in_progress: "bg-amber-400 text-white",
+  in_progress_delayed: "bg-orange-600 text-white",
   completed: "bg-green-600 text-white",
   completed_delayed: "bg-green-600 text-white",
   cancelled_by_customer: "bg-red-500 text-white",
   service_on_pause: "bg-purple-500 text-white",
-  service_incomplete: "bg-gray-500 text-white",
+  incomplete: "bg-gray-500 text-white",
   status_not_marked: "bg-gray-500 text-white",
 };
 
@@ -270,14 +270,14 @@ export default function JobDetailPage() {
               <div className="mt-auto pt-2">
                 {["scheduled", "scheduled_delayed"].includes(job.status) && (
                   <button
-                    onClick={() => handleStatusChange("ongoing")}
+                    onClick={() => handleStatusChange("in_progress")}
                     disabled={actionLoading}
                     className="w-full bg-[#004aad] text-white font-semibold rounded-xl py-3.5 text-base disabled:opacity-60 active:scale-95 transition"
                   >
                     {actionLoading ? "Updating…" : "▶ Start Job"}
                   </button>
                 )}
-                {["ongoing", "ongoing_delayed"].includes(job.status) && (
+                {["in_progress", "in_progress_delayed"].includes(job.status) && (
                   <button
                     onClick={() => handleStatusChange("completed")}
                     disabled={actionLoading}

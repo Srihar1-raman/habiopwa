@@ -17,7 +17,7 @@ interface Allocation {
   scheduled_start_time: string | null;
   scheduled_end_time: string | null;
   status: string;
-  service_providers: { name: string; specialization: string | null } | null;
+  service_providers: { name: string; provider_type: string | null } | null;
   plan_request_items: { title: string } | null;
   customers: { name: string | null; customer_profiles: { flat_no: string | null; society: string | null } | null } | null;
 }

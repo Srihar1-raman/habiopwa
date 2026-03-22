@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (planRequest.status !== "finalized") {
+  if (planRequest.status !== "payment_pending") {
     return NextResponse.json(
-      { error: "Plan must be finalized before payment" },
+      { error: "Plan must be in payment_pending state before payment" },
       { status: 400 }
     );
   }
@@ -52,17 +52,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Payment failed" }, { status: 500 });
   }
 
-  // Mark plan as paid
+  // Mark plan as active
   await supabaseAdmin
     .from("plan_requests")
-    .update({ status: "paid", updated_at: new Date().toISOString() })
+    .update({ status: "active", updated_at: new Date().toISOString() })
     .eq("id", plan_request_id);
 
   // Log event
   await supabaseAdmin.from("plan_request_events").insert({
     plan_request_id,
-    event_type: "paid",
-    note: "Payment successful (stub)",
+    event_type: "active",
+    note: "Payment successful — plan is now active (stub)",
   });
 
   return NextResponse.json({

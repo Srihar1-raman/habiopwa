@@ -24,7 +24,7 @@ interface OnDemandRequest {
 interface Provider {
   id: string;
   name: string;
-  specialization: string | null;
+  provider_type: string | null;
 }
 
 interface AllocationFormState {
@@ -162,7 +162,7 @@ export default function OnDemandRequestsPage() {
                         <option value="">Select provider</option>
                         {providers.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name}{p.specialization ? ` · ${p.specialization}` : ""}
+                            {p.name}{p.provider_type ? ` · ${p.provider_type.replace(/_/g, ' ')}` : ""}
                           </option>
                         ))}
                       </select>

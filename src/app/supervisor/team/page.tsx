@@ -13,9 +13,8 @@ const STATUS_COLORS: Record<string, string> = {
 interface Provider {
   id: string;
   name: string;
-  specialization: string | null;
+  provider_type: string | null;
   status: string;
-  is_active: boolean;
   phone: string | null;
 }
 
@@ -68,16 +67,14 @@ export default function TeamPage() {
                 <p className="font-semibold text-gray-900">{p.name}</p>
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    p.is_active
-                      ? STATUS_COLORS["active"]
-                      : STATUS_COLORS["inactive"]
+                    STATUS_COLORS[p.status] ?? STATUS_COLORS["inactive"]
                   }`}
                 >
-                  {p.is_active ? p.status ?? "active" : "inactive"}
+                  {p.status}
                 </span>
               </div>
-              {p.specialization && (
-                <p className="text-sm text-gray-500">{p.specialization}</p>
+              {p.provider_type && (
+                <p className="text-sm text-gray-500">{p.provider_type.replace(/_/g, " ")}</p>
               )}
               {p.phone && <p className="text-xs text-gray-400 mt-1">{p.phone}</p>}
             </button>

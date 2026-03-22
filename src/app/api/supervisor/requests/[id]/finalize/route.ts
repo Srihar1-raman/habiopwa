@@ -23,9 +23,9 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (planRequest.status === "finalized" || planRequest.status === "paid") {
+  if (planRequest.status === "payment_pending" || planRequest.status === "active") {
     return NextResponse.json(
-      { error: "Already finalized or paid" },
+      { error: "Already finalized or active" },
       { status: 400 }
     );
   }
@@ -33,7 +33,7 @@ export async function POST(
   const { error } = await supabaseAdmin
     .from("plan_requests")
     .update({
-      status: "finalized",
+      status: "payment_pending",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -44,8 +44,8 @@ export async function POST(
 
   await supabaseAdmin.from("plan_request_events").insert({
     plan_request_id: id,
-    event_type: "finalized",
-    note: "Supervisor finalized the plan",
+    event_type: "payment_pending",
+    note: "Supervisor finalised the plan — awaiting payment",
   });
 
   return NextResponse.json({ ok: true });

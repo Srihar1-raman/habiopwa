@@ -13,17 +13,22 @@ interface Job {
   actual_end_time: string | null;
   status: string;
   is_locked: boolean;
-  service_providers: { name: string; specialization: string } | null;
+  service_providers: { name: string; provider_type: string | null } | null;
   plan_request_items: { title: string; frequency_label: string } | null;
 }
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: "bg-blue-100 text-blue-800",
-  ongoing: "bg-amber-100 text-amber-800",
+  scheduled_delayed: "bg-orange-100 text-orange-800",
+  in_progress: "bg-amber-100 text-amber-800",
+  in_progress_delayed: "bg-orange-100 text-orange-800",
   completed: "bg-green-100 text-green-800",
   completed_delayed: "bg-green-100 text-green-800",
   cancelled_by_customer: "bg-red-100 text-red-800",
+  cancelled: "bg-red-100 text-red-800",
   service_on_pause: "bg-purple-100 text-purple-800",
+  incomplete: "bg-gray-100 text-gray-700",
+  status_not_marked: "bg-gray-100 text-gray-700",
 };
 
 function statusStyle(status: string) {
@@ -151,8 +156,8 @@ export default function JobDetailPage() {
               <p className="text-sm font-medium text-gray-800">
                 {job.service_providers?.name ?? "Your provider"}
               </p>
-              {job.service_providers?.specialization && (
-                <p className="text-xs text-gray-500 mt-0.5">{job.service_providers.specialization}</p>
+              {job.service_providers?.provider_type && (
+                <p className="text-xs text-gray-500 mt-0.5">{job.service_providers.provider_type?.replace(/_/g, ' ')}</p>
               )}
             </div>
           </div>

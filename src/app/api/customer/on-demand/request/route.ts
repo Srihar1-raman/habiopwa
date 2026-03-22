@@ -36,33 +36,36 @@ export async function POST(req: NextRequest) {
     request_time_preference,
     customer_notes,
   } = body as {
-    plan_request_id: string;
+    plan_request_id?: string;
     job_id: string;
     request_date: string;
     request_time_preference?: string;
     customer_notes?: string;
   };
 
-  if (!plan_request_id || !job_id || !request_date) {
+  if (!job_id || !request_date) {
     return NextResponse.json({ ok: false, error: "Invalid input" }, { status: 400 });
   }
 
-  const { data: plan, error: planError } = await supabaseAdmin
-    .from("plan_requests")
-    .select("id, status, customer_id")
-    .eq("id", plan_request_id)
-    .eq("customer_id", customer.id)
-    .single();
+  // If plan_request_id provided, validate it belongs to the customer and is active
+  if (plan_request_id) {
+    const { data: plan, error: planError } = await supabaseAdmin
+      .from("plan_requests")
+      .select("id, status, customer_id")
+      .eq("id", plan_request_id)
+      .eq("customer_id", customer.id)
+      .single();
 
-  if (planError || !plan) {
-    return NextResponse.json({ ok: false, error: "Plan not found" }, { status: 404 });
-  }
+    if (planError || !plan) {
+      return NextResponse.json({ ok: false, error: "Plan not found" }, { status: 404 });
+    }
 
-  if (plan.status !== "paid") {
-    return NextResponse.json(
-      { ok: false, error: "Plan must be paid to request on-demand services" },
-      { status: 400 }
-    );
+    if (plan.status !== "active") {
+      return NextResponse.json(
+        { ok: false, error: "Plan must be active to request on-demand services" },
+        { status: 400 }
+      );
+    }
   }
 
   // Check if this is a tech service by looking up the job's category slug and service_type
@@ -79,13 +82,15 @@ export async function POST(req: NextRequest) {
   const categorySlug = (job.service_categories as unknown as { slug: string } | null)?.slug;
   const isTechService = categorySlug === "technician-services";
 
-  if (isTechService && job.service_type) {
+  if (isTechService && job.service_type && plan_request_id) {
+    const monthYear = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const { data: allowance, error: allowanceError } = await supabaseAdmin
       .from("tech_services_allowance")
       .select("used_count, allowed_count")
       .eq("plan_request_id", plan_request_id)
       .eq("service_type", job.service_type)
-      .single();
+      .eq("month_year", monthYear)
+      .maybeSingle();
 
     if (!allowanceError && allowance && allowance.used_count >= allowance.allowed_count) {
       return NextResponse.json(

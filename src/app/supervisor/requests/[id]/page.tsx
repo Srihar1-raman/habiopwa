@@ -153,7 +153,7 @@ export default function SupervisorRequestDetailPage() {
     );
     setFinalizing(false);
     if (res.ok) {
-      setRequest((prev) => (prev ? { ...prev, status: "finalized" } : prev));
+      setRequest((prev) => (prev ? { ...prev, status: "payment_pending" } : prev));
     }
   }
 
@@ -181,8 +181,8 @@ export default function SupervisorRequestDetailPage() {
   }
 
   const profile = request.customers?.customer_profiles;
-  const canEdit = !["paid", "cancelled"].includes(request.status);
-  const canFinalize = ["submitted", "under_process"].includes(request.status);
+  const canEdit = !["active", "cancelled", "closed"].includes(request.status);
+  const canFinalize = ["submitted", "captain_allocation_pending", "captain_review_pending"].includes(request.status);
 
   const total = items.reduce((s, i) => s + Number(i.price_monthly), 0);
 

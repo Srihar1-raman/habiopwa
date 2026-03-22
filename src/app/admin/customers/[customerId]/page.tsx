@@ -60,14 +60,11 @@ const STATUS_COLORS: Record<string, string> = {
   active: "bg-green-100 text-green-700",
   paused: "bg-gray-100 text-gray-600",
   completed: "bg-teal-100 text-teal-700",
-  under_process: "bg-blue-100 text-blue-700",
-  finalized: "bg-purple-100 text-purple-700",
-  paid: "bg-green-100 text-green-700",
   cancelled: "bg-gray-100 text-gray-500",
+  closed: "bg-gray-200 text-gray-700",
   open: "bg-red-100 text-red-700",
   in_progress: "bg-orange-100 text-orange-700",
   resolved: "bg-green-100 text-green-700",
-  closed: "bg-gray-100 text-gray-500",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -78,10 +75,8 @@ const STATUS_LABELS: Record<string, string> = {
   active: "Active",
   paused: "Paused",
   completed: "Completed",
-  under_process: "Under Process",
-  finalized: "Finalized",
-  paid: "Paid",
   cancelled: "Cancelled",
+  closed: "Closed",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {

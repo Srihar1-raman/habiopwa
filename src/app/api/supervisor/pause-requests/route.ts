@@ -27,7 +27,7 @@ export async function GET() {
       "*, customers(name, phone), plan_requests(request_code)"
     )
     .in("plan_request_id", planIds)
-    .or("status.eq.pending,supervisor_approval_status.eq.pending")
+    .eq("status", "pending")
     .order("created_at", { ascending: false });
 
   if (error) {

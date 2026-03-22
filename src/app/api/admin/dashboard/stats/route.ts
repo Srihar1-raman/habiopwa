@@ -20,15 +20,15 @@ export async function GET() {
       supabaseAdmin
         .from("plan_requests")
         .select("customer_id")
-        .eq("status", "paid"),
+        .eq("status", "active"),
       supabaseAdmin
         .from("plan_requests")
         .select("id", { count: "exact", head: true })
-        .eq("status", "paid"),
+        .eq("status", "active"),
       supabaseAdmin
         .from("plan_requests")
         .select("id", { count: "exact", head: true })
-        .in("status", ["submitted", "under_process"]),
+        .in("status", ["submitted", "captain_allocation_pending", "captain_review_pending", "payment_pending"]),
       supabaseAdmin
         .from("issue_tickets")
         .select("id", { count: "exact", head: true })
@@ -40,10 +40,10 @@ export async function GET() {
       supabaseAdmin
         .from("service_providers")
         .select("id", { count: "exact", head: true })
-        .eq("is_active", true),
+        .eq("status", "available"),
     ]);
 
-    // Unique customers with at least one paid plan
+    // Unique customers with at least one active plan
     const uniqueCustomerIds = new Set(
       (customersWithPaidPlan.data ?? []).map((r) => r.customer_id)
     );

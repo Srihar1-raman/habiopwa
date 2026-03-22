@@ -24,7 +24,7 @@ export async function GET() {
     // Fetch all provider team assignments with provider details
     const { data: assignments, error: assignError } = await supabaseAdmin
       .from("provider_team_assignments")
-      .select("id, supervisor_id, service_provider_id, assigned_at, service_providers(id, name, phone, specialization, is_active)");
+      .select("id, supervisor_id, service_provider_id, assigned_at, service_providers(id, name, phone, provider_type, status)");
 
     if (assignError) {
       return NextResponse.json({ error: assignError.message }, { status: 500 });
