@@ -2,6 +2,61 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getStaffFromRequest } from "@/lib/staff-session";
 
+function generateRequestCode(): string {
+  const date = new Date();
+  const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, "");
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let rand = "";
+  for (let i = 0; i < 4; i++) {
+    rand += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `HB-${yyyymmdd}-${rand}`;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const staff = await getStaffFromRequest();
+    if (!staff || !["admin", "ops_lead", "manager"].includes(staff.role)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { customer_id } = body ?? {};
+
+    if (!customer_id) {
+      return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
+    }
+
+    // Verify customer exists
+    const { data: customer, error: customerError } = await supabaseAdmin
+      .from("customers")
+      .select("id")
+      .eq("id", customer_id)
+      .single();
+
+    if (customerError || !customer) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
+
+    const request_code = generateRequestCode();
+
+    const { data: planRequest, error: insertError } = await supabaseAdmin
+      .from("plan_requests")
+      .insert({ customer_id, request_code, status: "cart_in_progress" })
+      .select("id, request_code, status")
+      .single();
+
+    if (insertError || !planRequest) {
+      return NextResponse.json({ error: insertError?.message ?? "Insert failed" }, { status: 500 });
+    }
+
+    return NextResponse.json({ planRequest }, { status: 201 });
+  } catch (err) {
+    console.error("Plan request POST error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const staff = await getStaffFromRequest();

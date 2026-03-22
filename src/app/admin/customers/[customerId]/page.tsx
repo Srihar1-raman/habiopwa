@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, UserCheck, RefreshCw } from "lucide-react";
+import { ArrowLeft, UserCheck, RefreshCw, Plus } from "lucide-react";
 
 interface CustomerProfile {
   flat_no: string | null;
@@ -191,6 +191,29 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allocateModal, setAllocateModal] = useState<PlanRequest | null>(null);
+  const [creatingPlan, setCreatingPlan] = useState(false);
+
+  async function handleCreatePlan() {
+    if (creatingPlan) return;
+    setCreatingPlan(true);
+    try {
+      const res = await fetch("/api/admin/plan-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: customerId }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+      } else {
+        router.push(`/admin/customers/${customerId}/plans/${data.planRequest.id}`);
+      }
+    } catch {
+      alert("Failed to create plan");
+    } finally {
+      setCreatingPlan(false);
+    }
+  }
 
   function loadData() {
     if (!customerId) return;
@@ -308,10 +331,18 @@ export default function CustomerDetailPage() {
 
       {/* Plan Requests */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">
             Plan Requests ({planRequests.length})
           </h2>
+          <button
+            onClick={handleCreatePlan}
+            disabled={creatingPlan}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-[#004aad] text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={14} />
+            {creatingPlan ? "Creating…" : "Create Plan"}
+          </button>
         </div>
         {planRequests.length === 0 ? (
           <p className="px-5 py-6 text-gray-500 text-sm">No plan requests</p>
@@ -329,7 +360,11 @@ export default function CustomerDetailPage() {
             </thead>
             <tbody>
               {planRequests.map((pr) => (
-                <tr key={pr.id} className="border-b border-gray-50">
+                <tr
+                  key={pr.id}
+                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/admin/customers/${customerId}/plans/${pr.id}`)}
+                >
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{pr.request_code}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[pr.status] ?? "bg-gray-100 text-gray-600"}`}>
@@ -345,7 +380,7 @@ export default function CustomerDetailPage() {
                   <td className="px-4 py-2.5 text-gray-500">
                     {new Date(pr.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                     {canAllocateSupervisor(pr) && (
                       <button
                         onClick={() => setAllocateModal(pr)}
