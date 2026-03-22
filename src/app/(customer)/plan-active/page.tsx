@@ -53,14 +53,15 @@ interface Job {
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
   scheduled:            { label: "Scheduled",          color: "bg-blue-50 text-blue-700",    dot: "bg-blue-500" },
   scheduled_delayed:    { label: "Delayed",             color: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
-  ongoing:              { label: "In Progress",         color: "bg-amber-50 text-amber-700",  dot: "bg-amber-500" },
-  ongoing_delayed:      { label: "Ongoing (Late)",      color: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
+  in_progress:          { label: "In Progress",         color: "bg-amber-50 text-amber-700",  dot: "bg-amber-500" },
+  in_progress_delayed:  { label: "In Progress (Late)",  color: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
   completed:            { label: "Done",                color: "bg-green-50 text-green-700",  dot: "bg-green-500" },
   completed_delayed:    { label: "Done (Late)",         color: "bg-green-50 text-green-700",  dot: "bg-green-400" },
   cancelled_by_customer:{ label: "Cancelled",           color: "bg-red-50 text-red-600",      dot: "bg-red-500" },
   service_on_pause:     { label: "Paused",              color: "bg-purple-50 text-purple-700",dot: "bg-purple-500" },
-  service_incomplete:   { label: "Incomplete",          color: "bg-gray-100 text-gray-600",   dot: "bg-gray-400" },
-  reallocated:          { label: "Reallocated",         color: "bg-indigo-50 text-indigo-700",dot: "bg-indigo-400" },
+  incomplete:           { label: "Incomplete",          color: "bg-gray-100 text-gray-600",   dot: "bg-gray-400" },
+  cancelled:            { label: "Cancelled",           color: "bg-red-50 text-red-600",      dot: "bg-red-500" },
+  status_not_marked:    { label: "Not Marked",          color: "bg-gray-100 text-gray-600",   dot: "bg-gray-400" },
 };
 
 const BANNERS = [
@@ -184,10 +185,9 @@ export default function PlanActivePage() {
 
   // Group today's jobs by status
   const hasTodayJobs = todayJobs.length > 0;
-  const activeJobs = todayJobs.filter((j) => ["scheduled", "scheduled_delayed", "ongoing", "ongoing_delayed"].includes(j.status));
+  const activeJobs = todayJobs.filter((j) => ["scheduled", "scheduled_delayed", "in_progress", "in_progress_delayed"].includes(j.status));
   const completedJobs = todayJobs.filter((j) => j.status.startsWith("completed"));
-  const cancelledJobs = todayJobs.filter((j) => ["cancelled_by_customer", "service_on_pause", "service_incomplete"].includes(j.status));
-  const reallocatedJobs = todayJobs.filter((j) => j.status === "reallocated");
+  const cancelledJobs = todayJobs.filter((j) => ["cancelled_by_customer", "service_on_pause", "incomplete", "cancelled", "status_not_marked"].includes(j.status));
 
   return (
     <div className="flex flex-col min-h-dvh pb-10">
@@ -313,7 +313,7 @@ export default function PlanActivePage() {
             })}
 
             {/* Counts row */}
-            {(activeJobs.length > 0 || completedJobs.length > 0 || cancelledJobs.length > 0 || reallocatedJobs.length > 0) && (
+            {(activeJobs.length > 0 || completedJobs.length > 0 || cancelledJobs.length > 0) && (
               <div className="flex gap-2 mt-1 flex-wrap">
                 {activeJobs.length > 0 && (
                   <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
@@ -328,11 +328,6 @@ export default function PlanActivePage() {
                 {cancelledJobs.length > 0 && (
                   <span className="text-xs bg-red-50 text-red-600 px-2.5 py-1 rounded-full font-medium">
                     {cancelledJobs.length} cancelled/paused
-                  </span>
-                )}
-                {reallocatedJobs.length > 0 && (
-                  <span className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-medium">
-                    {reallocatedJobs.length} reallocated
                   </span>
                 )}
               </div>

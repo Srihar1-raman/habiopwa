@@ -51,13 +51,13 @@ interface Provider {
 const STATUS_STYLES: Record<string, string> = {
   scheduled: "bg-blue-700 text-white",
   scheduled_delayed: "bg-orange-500 text-white",
-  ongoing: "bg-amber-400 text-white",
-  ongoing_delayed: "bg-orange-600 text-white",
+  in_progress: "bg-amber-400 text-white",
+  in_progress_delayed: "bg-orange-600 text-white",
   completed: "bg-green-600 text-white",
   completed_delayed: "bg-green-600 text-white",
   cancelled_by_customer: "bg-red-500 text-white",
   service_on_pause: "bg-purple-500 text-white",
-  service_incomplete: "bg-gray-500 text-white",
+  incomplete: "bg-gray-500 text-white",
   status_not_marked: "bg-gray-500 text-white",
 };
 
@@ -275,7 +275,7 @@ export default function MyDayJobsPage() {
               .join(", ");
             const statusStyle = STATUS_STYLES[job.status] ?? "bg-gray-500 text-white";
             const canStart = !job.is_locked && ["scheduled", "scheduled_delayed"].includes(job.status);
-            const canEnd = !job.is_locked && ["ongoing", "ongoing_delayed"].includes(job.status);
+            const canEnd = !job.is_locked && ["in_progress", "in_progress_delayed"].includes(job.status);
 
             return (
               <div
@@ -304,7 +304,7 @@ export default function MyDayJobsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleStatusChange(job.id, canStart ? "ongoing" : "completed");
+                        handleStatusChange(job.id, canStart ? "in_progress" : "completed");
                       }}
                       disabled={actionLoading === job.id}
                       className={`text-xs font-semibold px-3 py-1.5 rounded-full transition active:scale-95 disabled:opacity-60 ${
