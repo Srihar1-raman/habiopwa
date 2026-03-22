@@ -20,7 +20,7 @@ export async function GET() {
     .from("customer_profiles")
     .select("customer_id")
     .eq("customer_id", customer.id)
-    .single();
+    .maybeSingle();
 
   const { data: planRequest } = await supabaseAdmin
     .from("plan_requests")
@@ -29,13 +29,13 @@ export async function GET() {
     .neq("status", "cancelled")
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   return NextResponse.json({
     authenticated: true,
     hasProfile: !!profile,
     planStatus: planRequest?.status ?? null,
-    customer: { id: customer.id, phone: customer.phone },
+    customer: { id: customer.id, phone: customer.phone, name: customer.name },
   });
 }
 
