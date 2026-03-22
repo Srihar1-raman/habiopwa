@@ -238,7 +238,7 @@ export default function NewCustomerPage() {
         {step === 1 && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Phone Verification</h2>
-            <p className="text-sm text-gray-500 mb-6">Enter the customer's mobile number to get started</p>
+            <p className="text-sm text-gray-500 mb-6">Enter the customer&apos;s mobile number to get started</p>
 
             {!otpSent ? (
               <form onSubmit={handleSendOtp} className="flex flex-col gap-4">
@@ -327,7 +327,7 @@ export default function NewCustomerPage() {
           <form onSubmit={handleStep2} className="flex flex-col gap-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Basic Information</h2>
-              <p className="text-sm text-gray-500 mb-6">Enter the customer's name</p>
+              <p className="text-sm text-gray-500 mb-6">Enter the customer&apos;s name</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
