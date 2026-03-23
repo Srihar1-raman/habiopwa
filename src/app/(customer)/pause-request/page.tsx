@@ -132,7 +132,9 @@ export default function PauseRequestPage() {
         body.pause_start_date = startDate;
         body.pause_end_date = endDate;
       } else {
+        // single_job: pause_end_date must equal pause_start_date (same day)
         body.pause_start_date = selectedJobDate;
+        body.pause_end_date = selectedJobDate;
         body.job_allocation_id = selectedJobId;
       }
       const res = await fetch("/api/customer/pause-request", {
@@ -140,7 +142,11 @@ export default function PauseRequestPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Could not submit request. Please try again.");
+        return;
+      }
       setSuccess(true);
       const updated = await fetch("/api/customer/pause-request").then((r) => r.json());
       setRequests(updated.pauseRequests ?? []);
