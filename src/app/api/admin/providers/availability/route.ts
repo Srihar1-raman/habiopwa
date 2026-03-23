@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     let providerQuery = supabaseAdmin
       .from("service_providers")
       .select("id, name, provider_type, status")
-      .eq("status", "active")
+      .neq("status", "inactive")
       .order("name");
 
     if (providerIdsParam) {

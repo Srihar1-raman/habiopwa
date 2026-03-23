@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
       const ids = (assignments ?? [])
         .map((a) => a.service_provider_id)
-        .filter((id): id is string => id !== null && id !== undefined);
+        .filter((id): id is string => id !== null);
       if (ids.length === 0) {
         return NextResponse.json({ providers: [] });
       }
