@@ -11,6 +11,7 @@ import {
   type JobPricingParams,
 } from "@/lib/pricing";
 import { formatCurrency, defaultPlusDate } from "@/lib/utils";
+import { PlanItemWeeklyCard, type AllocationUpdate } from "@/components/PlanItemWeeklyCard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ interface PlanItem {
   preferred_start_time: string | null;
   preferred_provider_id: string | null;
   backup_provider_id: string | null;
+  scheduled_day_of_week: number | null;
   service_categories: { slug: string; name: string } | null;
   service_jobs: {
     slug: string;
@@ -942,6 +944,21 @@ export default function PlanDetailPage() {
 
   // Helper: shared editable items panel (used across all non-terminal statuses)
   function EditableItemsPanel() {
+    const planStartDate = plan?.plan_start_date ?? defaultPlusDate(3);
+    const useWeeklyCard = status === "captain_review_pending";
+
+    function handleWeeklyCardUpdate(itemId: string, updates: AllocationUpdate) {
+      const apiUpdates: Record<string, unknown> = {};
+      if (updates.unit_value !== undefined) apiUpdates.unit_value = updates.unit_value;
+      if (updates.scheduled_start_time !== undefined) apiUpdates.preferred_start_time = updates.scheduled_start_time || null;
+      if (updates.service_provider_id !== undefined) apiUpdates.preferred_provider_id = updates.service_provider_id || null;
+      if (updates.backup_provider_id !== undefined) apiUpdates.backup_provider_id = updates.backup_provider_id ?? null;
+      if (updates.scheduled_day_of_week !== undefined) apiUpdates.scheduled_day_of_week = updates.scheduled_day_of_week ?? null;
+      if (Object.keys(apiUpdates).length > 0) {
+        handleUpdateItem(itemId, apiUpdates);
+      }
+    }
+
     return (
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -961,6 +978,21 @@ export default function PlanDetailPage() {
               No items added yet
               {canAddItems ? " — click \"Add Service\" to begin." : "."}
             </p>
+          ) : useWeeklyCard ? (
+            items.map((item) => (
+              <PlanItemWeeklyCard
+                key={item.id}
+                item={{
+                  ...item,
+                  service_categories: item.service_categories ? { name: item.service_categories.name } : null,
+                }}
+                planStartDate={planStartDate}
+                allProviders={providers}
+                availabilityApiBase="/api/admin/providers/availability"
+                onUpdate={(updates) => handleWeeklyCardUpdate(item.id, updates)}
+                onDelete={() => handleDeleteItem(item.id)}
+              />
+            ))
           ) : (
             items.map((item) => (
               <EditableItemCard

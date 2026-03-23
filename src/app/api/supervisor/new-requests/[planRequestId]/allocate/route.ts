@@ -11,6 +11,7 @@ interface Allocation {
   scheduled_start_time: string;
   scheduled_end_time: string;
   unit_value?: number; // optional — if provided, updates plan_request_items pricing
+  scheduled_day_of_week?: number | null; // 0=Sun … 6=Sat; only for weekly items
 }
 
 export async function PATCH(
@@ -72,7 +73,7 @@ export async function PATCH(
 
   // Update plan_request_items when unit_value or backup_provider_id is provided
   const itemsToUpdate = allocations.filter(
-    (a) => a.unit_value !== undefined || a.backup_provider_id !== undefined
+    (a) => a.unit_value !== undefined || a.backup_provider_id !== undefined || a.scheduled_day_of_week !== undefined
   );
 
   if (itemsToUpdate.length > 0) {
@@ -131,6 +132,11 @@ export async function PATCH(
       // Persist backup_provider_id if provided
       if (alloc.backup_provider_id !== undefined) {
         itemUpdates.backup_provider_id = alloc.backup_provider_id || null;
+      }
+
+      // Persist scheduled_day_of_week for weekly items
+      if (alloc.scheduled_day_of_week !== undefined) {
+        itemUpdates.scheduled_day_of_week = alloc.scheduled_day_of_week ?? null;
       }
 
       await supabaseAdmin

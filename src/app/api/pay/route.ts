@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCustomerFromRequest } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase";
+import { expandPlanAllocations } from "@/lib/expandPlanAllocations";
 
 export async function POST(req: NextRequest) {
   const customer = await getCustomerFromRequest();
@@ -64,6 +65,9 @@ export async function POST(req: NextRequest) {
     event_type: "active",
     note: "Payment successful — plan is now active (stub)",
   });
+
+  // Expand supervisor template allocations into the full 30-day schedule
+  await expandPlanAllocations(plan_request_id, supabaseAdmin);
 
   return NextResponse.json({
     ok: true,
