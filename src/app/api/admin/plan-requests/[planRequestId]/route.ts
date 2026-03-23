@@ -21,7 +21,11 @@ export async function GET(
         `*, customers(id, name, phone, customer_profiles(*)),
          assigned_supervisor:staff_accounts!plan_requests_assigned_supervisor_id_fkey(id, name, phone),
          payments(id, amount, status, created_at),
-         plan_request_items(*, service_categories(slug, name), service_jobs(slug, name, code, min_unit, max_unit, unit_interval))`
+         plan_request_items(
+           *, service_categories(slug, name), service_jobs(slug, name, code, min_unit, max_unit, unit_interval),
+           primary_provider:service_providers!plan_request_items_preferred_provider_id_fkey(id, name, provider_type),
+           backup_provider:service_providers!plan_request_items_backup_provider_id_fkey(id, name, provider_type)
+         )`
       )
       .eq("id", planRequestId)
       .single();

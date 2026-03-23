@@ -433,6 +433,14 @@ export function PlanItemWeeklyCard({
   const [weekDayAvails, setWeekDayAvails] = useState<WeekDayAvail[]>([]);
   const [loadingDays, setLoadingDays] = useState(false);
 
+  // Stable comma-separated list of all provider IDs visible in the dropdowns.
+  // Passed to the availability API so it only evaluates those providers,
+  // making the 7-day week-strip reflect the correct per-day availability.
+  const allProviderIdsParam = useMemo(
+    () => allProviders.map((p) => p.id).join(","),
+    [allProviders]
+  );
+
   const fetchWeekAvailability = useCallback(
     async (providerId: string, backupId: string, st: string, et: string) => {
       if (!providerId || !st || !et || !planStartDate) {
@@ -451,6 +459,12 @@ export function PlanItemWeeklyCard({
               start_time: st,
               end_time: et,
             });
+            // Scope the API call to only the providers visible in the dropdown.
+            // The supervisor availability endpoint scopes to the team automatically
+            // (ignores extra params). The admin endpoint uses provider_ids to filter.
+            if (allProviderIdsParam) {
+              params.set("provider_ids", allProviderIdsParam);
+            }
             const res = await fetch(`${availabilityApiBase}?${params}`);
             if (!res.ok)
               return { date, providers: [] as DayAvailability[] };
@@ -482,7 +496,7 @@ export function PlanItemWeeklyCard({
         setLoadingDays(false);
       }
     },
-    [availabilityApiBase, planStartDate]
+    [availabilityApiBase, planStartDate, allProviderIdsParam]
   );
 
   useEffect(() => {
