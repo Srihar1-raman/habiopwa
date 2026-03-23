@@ -79,6 +79,13 @@ const DOW_TO_NAME: Record<number, string> = {
   6: "saturday",
 };
 
+/** Computes end time (HH:MM) from a start time string and duration in minutes. */
+function computeEndTime(startTime: string, durationMins: number): string {
+  const [h, m] = startTime.split(":").map(Number);
+  const total = h * 60 + m + durationMins;
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 // ─── Main export ───────────────────────────────────────────────────────────────
 
 /**
@@ -231,16 +238,10 @@ export async function expandPlanAllocations(
     const durationMins =
       item.unit_type === "min"
         ? item.unit_value
-        : item.time_multiple != null && Number(item.time_multiple) > 0
-        ? Math.round(item.unit_value * Number(item.time_multiple))
+        : item.time_multiple != null && item.time_multiple > 0
+        ? Math.round(item.unit_value * item.time_multiple)
         : 30;
-    const endTime =
-      tmpl?.scheduled_end_time ||
-      (() => {
-        const [h, m] = startTime.split(":").map(Number);
-        const total = h * 60 + m + durationMins;
-        return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-      })();
+    const endTime = tmpl?.scheduled_end_time || computeEndTime(startTime, durationMins);
     const backupId = item.backup_provider_id;
     const primaryDayOff = weekOffMap.get(primaryId) ?? null; // e.g. "sunday"
 

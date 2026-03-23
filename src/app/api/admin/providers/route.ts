@@ -23,7 +23,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: teamErr.message }, { status: 500 });
       }
 
-      const ids = (assignments ?? []).map((a) => a.service_provider_id as string);
+      const ids = (assignments ?? [])
+        .map((a) => a.service_provider_id)
+        .filter((id): id is string => id !== null && id !== undefined);
       if (ids.length === 0) {
         return NextResponse.json({ providers: [] });
       }

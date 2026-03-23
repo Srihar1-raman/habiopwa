@@ -17,6 +17,12 @@ export function generateRequestCode(): string {
   return `${prefix}-${ts}${rand}`;
 }
 
+/** Abbreviated day names indexed by JS getDay() (0=Sun…6=Sat). */
+export const DOW_ABBR_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/** Full day names indexed by JS getDay() (0=Sun…6=Sat). */
+export const DOW_FULL_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
 /** Returns a YYYY-MM-DD date string offsetDays from today. */
 export function defaultPlusDate(offsetDays = 3): string {
   const d = new Date();

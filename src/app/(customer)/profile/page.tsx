@@ -12,6 +12,7 @@ import {
   X,
   CreditCard,
 } from "lucide-react";
+import { DOW_FULL_NAMES } from "@/lib/utils";
 
 interface Profile {
   name: string;
@@ -310,11 +311,10 @@ export default function ProfilePage() {
             {/* Plan items */}
             <div className="space-y-2">
               {planRequest.plan_request_items.map((item) => {
-                const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
                 const scheduleText = item.frequency_label === "Daily"
                   ? `Daily${item.instances_per_month ? ` · ~${item.instances_per_month} visits/mo` : ""}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
                   : item.scheduled_day_of_week != null
-                  ? `Weekly on ${DOW_NAMES[item.scheduled_day_of_week]}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
+                  ? `Weekly on ${DOW_FULL_NAMES[item.scheduled_day_of_week]}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
                   : `Weekly${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`;
 
                 return (

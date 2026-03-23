@@ -10,7 +10,7 @@ import {
   formatUnitValue,
   type JobPricingParams,
 } from "@/lib/pricing";
-import { formatCurrency, defaultPlusDate } from "@/lib/utils";
+import { formatCurrency, defaultPlusDate, DOW_ABBR_NAMES } from "@/lib/utils";
 import { PlanItemWeeklyCard, type AllocationUpdate } from "@/components/PlanItemWeeklyCard";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -653,11 +653,10 @@ function EditableItemCard({
 
 /** Compact read-only table row. */
 function ReadOnlyItemRow({ item }: { item: PlanItem }) {
-  const DOW_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const scheduleInfo = item.frequency_label === "Daily"
     ? `Daily${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
     : item.scheduled_day_of_week != null
-    ? `Weekly · ${DOW_NAMES[item.scheduled_day_of_week]}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
+    ? `Weekly · ${DOW_ABBR_NAMES[item.scheduled_day_of_week]}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
     : `Weekly${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`;
 
   return (
