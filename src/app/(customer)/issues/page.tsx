@@ -47,6 +47,7 @@ export default function CustomerIssuesPage() {
   const [pastJobs, setPastJobs] = useState<PastJob[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState("");
+  const [jobSearchDate, setJobSearchDate] = useState(""); // date filter for job search
 
   // Provider flow
   const [providerList, setProviderList] = useState<ServiceProvider[]>([]);
@@ -74,7 +75,10 @@ export default function CustomerIssuesPage() {
   useEffect(() => {
     if (category === "past_job") {
       setLoadingJobs(true);
-      fetch("/api/customer/jobs/history")
+      const url = jobSearchDate
+        ? `/api/customer/jobs/history?date=${jobSearchDate}`
+        : "/api/customer/jobs/history"; // defaults to today+yesterday
+      fetch(url)
         .then((r) => r.json())
         .then((d) => setPastJobs(d.jobs ?? []))
         .catch(() => setPastJobs([]))
@@ -90,7 +94,7 @@ export default function CustomerIssuesPage() {
     setSelectedJobId("");
     setSelectedProviderId("");
     setSelectedProviderName("");
-  }, [category]);
+  }, [category, jobSearchDate]);
 
   const showForm =
     (category === "past_job" && selectedJobId) ||
@@ -215,14 +219,40 @@ export default function CustomerIssuesPage() {
         {/* Step 2a: Select past job */}
         {category === "past_job" && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Select the Job</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-gray-700">Select the Job</p>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500">Search by date:</label>
+                <input
+                  type="date"
+                  value={jobSearchDate}
+                  onChange={(e) => { setJobSearchDate(e.target.value); setSelectedJobId(""); }}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#004aad]/30"
+                />
+                {jobSearchDate && (
+                  <button
+                    onClick={() => { setJobSearchDate(""); setSelectedJobId(""); }}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            {!jobSearchDate && (
+              <p className="text-xs text-gray-400 mb-2">Showing today and yesterday — search a specific date to find older jobs.</p>
+            )}
             {loadingJobs ? (
               <div className="flex items-center gap-2 py-2">
                 <div className="w-4 h-4 border-2 border-[#004aad] border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-gray-400">Loading your past jobs…</span>
+                <span className="text-xs text-gray-400">Loading jobs…</span>
               </div>
             ) : pastJobs.length === 0 ? (
-              <p className="text-sm text-gray-400">No completed jobs found.</p>
+              <p className="text-sm text-gray-400">
+                {jobSearchDate
+                  ? `No jobs found for ${new Date(jobSearchDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.`
+                  : "No jobs for today or yesterday. Search a specific date to find older jobs."}
+              </p>
             ) : (
               <select
                 value={selectedJobId}
@@ -233,8 +263,9 @@ export default function CustomerIssuesPage() {
                 {pastJobs.map((job) => (
                   <option key={job.id} value={job.id}>
                     {job.plan_request_items?.title ?? "Job"} ·{" "}
-                    {new Date(job.scheduled_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    {new Date(job.scheduled_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                     {job.service_providers?.name ? ` · ${job.service_providers.name}` : ""}
+                    {` · ${job.status.replace(/_/g, " ")}`}
                   </option>
                 ))}
               </select>

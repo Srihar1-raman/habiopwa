@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
 import {
   User,
   Calendar,
@@ -12,7 +11,6 @@ import {
   PauseCircle,
   AlertTriangle,
   Plus,
-  ClipboardList,
   Home,
   Sparkles,
   ShieldCheck,
@@ -149,9 +147,24 @@ export default function PlanActivePage() {
   const [historyJobs, setHistoryJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeBanner, setActiveBanner] = useState(0);
-  const [showAllHistory, setShowAllHistory] = useState(false);
   const [historyDateFilter, setHistoryDateFilter] = useState("");
+  const [historyLoadingAll, setHistoryLoadingAll] = useState(false);
+  const [allHistoryFetched, setAllHistoryFetched] = useState(false);
   const bannerTimer = useRef<NodeJS.Timeout | null>(null);
+
+  async function loadAllHistory() {
+    setHistoryLoadingAll(true);
+    try {
+      const res = await fetch("/api/customer/jobs/history?all=true");
+      const d = await res.json();
+      setHistoryJobs(d.jobs ?? []);
+      setAllHistoryFetched(true);
+    } catch {
+      // keep existing data
+    } finally {
+      setHistoryLoadingAll(false);
+    }
+  }
 
   // Auto-rotate banners every 4 seconds
   useEffect(() => {
@@ -163,6 +176,7 @@ export default function PlanActivePage() {
 
   useEffect(() => {
     const today = getLocalDateStr();
+    const threeDaysAgo = subtractDays(today, 2);
     const futureDates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today + "T00:00:00");
       d.setDate(d.getDate() + i + 1);
@@ -174,7 +188,8 @@ export default function PlanActivePage() {
       fetch(`/api/customer/jobs/${today}`).then((r) => r.json()),
       ...futureDates.map((d) => fetch(`/api/customer/jobs/${d}`).then((r) => r.json())),
       fetch("/api/customer/providers").then((r) => r.json()),
-      fetch("/api/customer/jobs/history").then((r) => r.json()),
+      // Fetch all jobs from last 3 days (all statuses, including incomplete/cancelled)
+      fetch(`/api/customer/jobs/history?from=${threeDaysAgo}&to=${today}`).then((r) => r.json()),
     ]).then(([planData, todayData, ...rest]) => {
       const futureData = rest.slice(0, futureDates.length);
       const providersData = rest[futureDates.length];
@@ -218,17 +233,11 @@ export default function PlanActivePage() {
   const completedJobs = todayJobs.filter((j) => j.status.startsWith("completed"));
   const cancelledJobs = todayJobs.filter((j) => ["cancelled_by_customer", "service_on_pause", "incomplete", "cancelled", "status_not_marked"].includes(j.status));
 
-  // Recent jobs for "last 3 days"
-  const today = getLocalDateStr();
-  const threeDaysAgo = subtractDays(today, 2);
-  const recentHistory = historyJobs.filter(
-    (j) => j.scheduled_date >= threeDaysAgo && j.scheduled_date <= today
-  );
+  // historyJobs already contains last 3 days (fetched with from/to params)
+  // filteredHistory: if user picks a specific date, show only that day; otherwise show what was fetched (3 days)
   const filteredHistory = historyDateFilter
     ? historyJobs.filter((j) => j.scheduled_date === historyDateFilter)
-    : showAllHistory
-    ? historyJobs
-    : recentHistory;
+    : historyJobs; // already scoped to 3 days by API, or all if showAllHistory was triggered via a separate fetch
 
   return (
     <div className="flex flex-col min-h-dvh pb-10">
@@ -384,11 +393,16 @@ export default function PlanActivePage() {
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
             {providers.map((p) => (
-              <div key={p.id} className="flex items-center justify-between px-4 py-3">
+              <button
+                key={p.id}
+                onClick={() => router.push(`/providers/${p.id}`)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+              >
                 <div>
                   <p className="text-sm font-medium text-gray-800">{p.name}</p>
                 </div>
-              </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
             ))}
           </div>
         </div>
@@ -400,20 +414,30 @@ export default function PlanActivePage() {
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-[#004aad]" />
             <h2 className="text-base font-semibold text-gray-900">
-              {showAllHistory || historyDateFilter ? "Job History" : "Recent Jobs"}
+              {historyDateFilter ? "Job History" : allHistoryFetched ? "All Past Jobs" : "Recent Jobs (3 days)"}
             </h2>
           </div>
-          <input
-            type="date"
-            value={historyDateFilter}
-            onChange={(e) => { setHistoryDateFilter(e.target.value); setShowAllHistory(false); }}
-            className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#004aad]/30"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={historyDateFilter}
+              onChange={(e) => setHistoryDateFilter(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#004aad]/30"
+            />
+            {historyDateFilter && (
+              <button
+                onClick={() => setHistoryDateFilter("")}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {filteredHistory.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center text-gray-400 text-sm">
-            No jobs in this period
+            {historyDateFilter ? "No jobs on this date." : "No jobs in the last 3 days."}
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
@@ -451,20 +475,24 @@ export default function PlanActivePage() {
                 </div>
               );
             })}
-            {!showAllHistory && !historyDateFilter && historyJobs.length > recentHistory.length && (
+            {!historyDateFilter && !allHistoryFetched && (
               <button
-                onClick={() => setShowAllHistory(true)}
-                className="w-full px-4 py-3 text-xs text-[#004aad] font-semibold text-center hover:bg-blue-50 flex items-center justify-center gap-1"
+                onClick={loadAllHistory}
+                disabled={historyLoadingAll}
+                className="w-full px-4 py-3 text-xs text-[#004aad] font-semibold text-center hover:bg-blue-50 flex items-center justify-center gap-1 disabled:opacity-50"
               >
-                See all {historyJobs.length} jobs <ChevronRight className="w-3.5 h-3.5" />
+                {historyLoadingAll ? "Loading…" : (<>See more <ChevronRight className="w-3.5 h-3.5" /></>)}
               </button>
             )}
-            {(showAllHistory || historyDateFilter) && (
+            {!historyDateFilter && allHistoryFetched && (
+              <p className="w-full px-4 py-2 text-xs text-gray-400 text-center">All jobs loaded</p>
+            )}
+            {historyDateFilter && (
               <button
-                onClick={() => { setShowAllHistory(false); setHistoryDateFilter(""); }}
+                onClick={() => setHistoryDateFilter("")}
                 className="w-full px-4 py-3 text-xs text-gray-500 text-center hover:bg-gray-50"
               >
-                Show less
+                Show last 3 days
               </button>
             )}
           </div>
@@ -498,49 +526,8 @@ export default function PlanActivePage() {
           </div>
         </div>
       )}
-
-      {/* Active Plan Summary */}
-      <div className="px-4 mt-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-900">My Plan</h2>
-          <span className="text-sm font-bold text-[#004aad]">
-            {formatCurrency(planRequest.total_price_monthly)}/m
-          </span>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
-          {planRequest.plan_request_items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-gray-800">{item.title}</p>
-                <p className="text-xs text-gray-400">
-                  {item.frequency_label}
-                  {item.service_categories?.name ? ` · ${item.service_categories.name}` : ""}
-                </p>
-              </div>
-              <p className="text-sm font-semibold text-gray-700">
-                {formatCurrency(item.price_monthly)}/m
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Jobs History link */}
-      <div className="px-4 mt-4">
-        <button
-          onClick={() => router.push("/jobs")}
-          className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-4 flex items-center justify-between"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gray-50 flex items-center justify-center">
-              <ClipboardList className="w-4 h-4 text-gray-500" />
-            </div>
-            <p className="text-sm font-semibold text-gray-800">View All Past Jobs</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-        </button>
-      </div>
     </div>
   );
 }
+
+      {/* Upcoming Schedule */}

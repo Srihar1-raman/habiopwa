@@ -19,8 +19,14 @@ export async function GET(
   }
 
   const today = new Date().toISOString().split("T")[0];
+  // Start of current month
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  // Start of next month
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
 
-  const [providerResult, allJobsResult, leavesResult, onLeaveResult] =
+  const [providerResult, allJobsResult, leavesResult, onLeaveResult, weekOffsResult] =
     await Promise.all([
       supabaseAdmin
         .from("service_providers")
@@ -48,6 +54,12 @@ export async function GET(
         .lte("leave_start_date", today)
         .gte("leave_end_date", today)
         .limit(1),
+      supabaseAdmin
+        .from("provider_week_offs")
+        .select("day_of_week, effective_from, effective_to")
+        .eq("service_provider_id", providerId)
+        .lte("effective_from", today)
+        .or(`effective_to.is.null,effective_to.gte.${today}`),
     ]);
 
   if (providerResult.error || !providerResult.data) {
@@ -56,12 +68,19 @@ export async function GET(
 
   const allJobs = allJobsResult.data ?? [];
 
-  const total = allJobs.length;
-  const completed = allJobs.filter((j) => j.status === "completed").length;
+  // Month-scoped stats
+  const thisMonthJobs = allJobs.filter(
+    (j) => j.scheduled_date && j.scheduled_date >= monthStart && j.scheduled_date < monthEnd
+  );
+  const total = thisMonthJobs.length;
+  const completed = thisMonthJobs.filter((j) => j.status === "completed" || j.status === "completed_delayed").length;
   const scheduled = allJobs.filter(
-    (j) => j.status === "scheduled" && (j.scheduled_date ?? "") >= today
+    (j) => (j.status === "scheduled" || j.status === "scheduled_delayed") && (j.scheduled_date ?? "") >= today
   ).length;
   const on_leave = (onLeaveResult.data ?? []).length > 0;
+
+  // Week-offs (active day(s) off)
+  const weekOffs = (weekOffsResult.data ?? []).map((w) => w.day_of_week as string);
 
   // Unique customers grouped by name
   const customerMap = new Map<
@@ -101,6 +120,7 @@ export async function GET(
   return NextResponse.json({
     provider: providerResult.data,
     stats: { total, completed, scheduled, on_leave },
+    weekOffs,
     recentJobs: allJobs,
     scheduledJobs,
     leaves: leavesResult.data ?? [],

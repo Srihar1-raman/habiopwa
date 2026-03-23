@@ -75,6 +75,12 @@ function statusPill(status: string) {
   return STATUS_PILL[status] ?? "bg-gray-100 text-gray-600";
 }
 
+// Maps JS getDay() (0=Sun) to our day_of_week string
+const JS_DOW_MAP: Record<number, string> = {
+  0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday",
+  4: "thursday", 5: "friday", 6: "saturday",
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProviderDetailPage() {
@@ -85,6 +91,7 @@ export default function ProviderDetailPage() {
   // ── Data ──
   const [provider, setProvider] = useState<ProviderDetail | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [weekOffs, setWeekOffs] = useState<string[]>([]);
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [scheduledJobs, setScheduledJobs] = useState<Job[]>([]);
   const [leaves, setLeaves] = useState<Leave[]>([]);
@@ -120,6 +127,7 @@ export default function ProviderDetailPage() {
       .then((d) => {
         setProvider(d.provider ?? null);
         setStats(d.stats ?? null);
+        setWeekOffs(d.weekOffs ?? []);
         setRecentJobs(d.recentJobs ?? []);
         setScheduledJobs(d.scheduledJobs ?? []);
         setLeaves(d.leaves ?? []);
@@ -174,6 +182,12 @@ export default function ProviderDetailPage() {
     return leaves.some(
       (l) => l.status === "approved" && l.leave_start_date <= dateStr && l.leave_end_date >= dateStr
     );
+  }
+
+  function isWeekOffDay(dateStr: string) {
+    const d = new Date(dateStr + "T00:00:00");
+    const dow = JS_DOW_MAP[d.getDay()];
+    return weekOffs.includes(dow);
   }
 
   // ── Cancel job ──
@@ -315,6 +329,14 @@ export default function ProviderDetailPage() {
                 <p className="text-sm text-gray-500">{provider.provider_type.replace(/_/g, " ")}</p>
               )}
               {provider.phone && <p className="text-sm text-gray-400">{provider.phone}</p>}
+              {weekOffs.length > 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Week off:{" "}
+                  <span className="font-medium text-gray-600">
+                    {weekOffs.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")}
+                  </span>
+                </p>
+              )}
             </div>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusPill(provider.status)}`}>
               {provider.status.replace(/_/g, " ")}
@@ -323,15 +345,16 @@ export default function ProviderDetailPage() {
           {stats && (
             <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-gray-50">
               {[
-                { label: "Total", value: stats.total, icon: <Briefcase className="w-3.5 h-3.5" /> },
-                { label: "Done", value: stats.completed, icon: <CheckCircle className="w-3.5 h-3.5 text-green-500" /> },
-                { label: "Upcoming", value: stats.scheduled, icon: <Clock className="w-3.5 h-3.5 text-blue-500" /> },
-                { label: "On Leave", value: stats.on_leave ? "Yes" : "No", icon: <BriefcaseMedical className="w-3.5 h-3.5 text-yellow-500" /> },
+                { label: "This Month", sub: "Total", value: stats.total, icon: <Briefcase className="w-3.5 h-3.5" /> },
+                { label: "This Month", sub: "Done", value: stats.completed, icon: <CheckCircle className="w-3.5 h-3.5 text-green-500" /> },
+                { label: "Upcoming", sub: "Scheduled", value: stats.scheduled, icon: <Clock className="w-3.5 h-3.5 text-blue-500" /> },
+                { label: "Today", sub: "On Leave", value: stats.on_leave ? "Yes" : "No", icon: <BriefcaseMedical className="w-3.5 h-3.5 text-yellow-500" /> },
               ].map((s) => (
-                <div key={s.label} className="flex flex-col items-center gap-0.5">
+                <div key={s.sub} className="flex flex-col items-center gap-0.5">
                   <div className="text-gray-400">{s.icon}</div>
                   <p className="text-base font-bold text-gray-800">{s.value}</p>
-                  <p className="text-[10px] text-gray-400">{s.label}</p>
+                  <p className="text-[10px] font-medium text-gray-600">{s.sub}</p>
+                  <p className="text-[9px] text-gray-400">{s.label}</p>
                 </div>
               ))}
             </div>
@@ -536,6 +559,7 @@ export default function ProviderDetailPage() {
                 const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 const hasJobs = (jobsByDate.get(dateStr)?.length ?? 0) > 0;
                 const onLeave = isLeaveDay(dateStr);
+                const onWeekOff = isWeekOffDay(dateStr);
                 const isSelected = selectedDay === dateStr;
                 const isToday = dateStr === new Date().toISOString().split("T")[0];
                 return (
@@ -545,13 +569,15 @@ export default function ProviderDetailPage() {
                     className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-colors ${
                       isSelected ? "bg-[#004aad] text-white" :
                       isToday ? "bg-blue-50 text-[#004aad] font-bold" :
+                      onWeekOff ? "bg-gray-50" :
                       "hover:bg-gray-50"
                     }`}
                   >
-                    <span className={`text-xs ${isSelected ? "text-white font-bold" : "text-gray-700"}`}>{day}</span>
+                    <span className={`text-xs ${isSelected ? "text-white font-bold" : onWeekOff ? "text-gray-400" : "text-gray-700"}`}>{day}</span>
                     <div className="flex gap-0.5 mt-0.5 h-1.5">
                       {hasJobs && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-[#004aad]"}`} />}
                       {onLeave && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-yellow-200" : "bg-yellow-400"}`} />}
+                      {onWeekOff && !onLeave && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-gray-300" : "bg-gray-400"}`} />}
                     </div>
                   </button>
                 );
@@ -564,6 +590,11 @@ export default function ProviderDetailPage() {
                 {isLeaveDay(selectedDay) && (
                   <p className="text-xs text-yellow-700 bg-yellow-50 rounded-lg px-2 py-1 mb-2">
                     Provider on approved leave
+                  </p>
+                )}
+                {isWeekOffDay(selectedDay) && !isLeaveDay(selectedDay) && (
+                  <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1 mb-2">
+                    Scheduled weekly day off
                   </p>
                 )}
                 {selectedDayJobs.length === 0 ? (
@@ -590,6 +621,9 @@ export default function ProviderDetailPage() {
           <div className="px-3 pb-2 flex gap-3 text-[10px] text-gray-400">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#004aad] inline-block" /> Jobs</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" /> Leave</span>
+            {weekOffs.length > 0 && (
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> Week off</span>
+            )}
           </div>
         </div>
 

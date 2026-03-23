@@ -174,6 +174,59 @@ export default function SchedulePage() {
     };
   }
 
+  // Compute column assignments for overlapping items so they render side-by-side
+  const itemColumns = useMemo(() => {
+    // Each entry: { item, startMin, endMin }
+    type Entry = { item: TimelineItem; startMin: number; endMin: number; col: number; totalCols: number };
+    const entries: Entry[] = filteredItems.map((item) => ({
+      item,
+      startMin: timeToMinutes(itemStartTime(item)),
+      endMin: timeToMinutes(itemEndTime(item)),
+      col: 0,
+      totalCols: 1,
+    }));
+
+    // Greedy column assignment
+    const cols: number[] = []; // cols[i] = endMin of last item in column i
+    for (const entry of entries) {
+      let placed = false;
+      for (let c = 0; c < cols.length; c++) {
+        if (entry.startMin >= cols[c]) {
+          entry.col = c;
+          cols[c] = entry.endMin;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        entry.col = cols.length;
+        cols.push(entry.endMin);
+      }
+    }
+
+    // Second pass: find total concurrent columns for each item
+    for (let i = 0; i < entries.length; i++) {
+      const a = entries[i];
+      let maxCol = a.col;
+      for (let j = 0; j < entries.length; j++) {
+        if (i === j) continue;
+        const b = entries[j];
+        // overlap?
+        if (a.startMin < b.endMin && a.endMin > b.startMin) {
+          maxCol = Math.max(maxCol, b.col);
+        }
+      }
+      a.totalCols = maxCol + 1;
+    }
+
+    // Build map keyed by item id
+    const map = new Map<string, { col: number; totalCols: number }>();
+    for (const e of entries) {
+      map.set(e.item.id, { col: e.col, totalCols: e.totalCols });
+    }
+    return map;
+  }, [filteredItems]);
+
   const totalTimelineHeight = SLOTS.length * SLOT_HEIGHT;
 
   return (
@@ -292,13 +345,22 @@ export default function SchedulePage() {
             {/* Job blocks */}
             {filteredItems.map((item) => {
               const { top, height } = getItemStyle(item);
+              const layout = itemColumns.get(item.id) ?? { col: 0, totalCols: 1 };
               const style = JOB_STATUS_STYLE[item.status] ?? DEFAULT_STYLE;
               const isOnDemand = item._type === "on_demand";
+              // Calculate percentage-based left/width for side-by-side columns
+              const colWidth = 100 / layout.totalCols;
+              const leftPct = layout.col * colWidth;
               return (
                 <div
                   key={`${item._type}-${item.id}`}
-                  className={`absolute left-1 right-1 rounded-lg border px-2 py-1 overflow-hidden ${style.bg} ${style.border}`}
-                  style={{ top: top + 1, height: height - 2 }}
+                  className={`absolute rounded-lg border px-2 py-1 overflow-hidden ${style.bg} ${style.border}`}
+                  style={{
+                    top: top + 1,
+                    height: height - 2,
+                    left: `calc(${leftPct}% + 2px)`,
+                    width: `calc(${colWidth}% - 4px)`,
+                  }}
                 >
                   <div className="flex items-start justify-between gap-1">
                     <p className={`text-xs font-semibold leading-tight truncate ${style.text}`}>
