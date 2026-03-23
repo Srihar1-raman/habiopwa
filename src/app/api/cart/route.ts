@@ -11,13 +11,17 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { preferred_start_date } = body;
 
-  // Find active cart — create one if it doesn't exist yet so the preferred
-  // start date can be saved even before the first item is added to the cart.
+  // Find active cart — use order+limit so we safely pick the most recent
+  // cart even if duplicates were created by a previous race condition.
+  // Create one if none exists so the preferred start date can be saved
+  // even before the first item is added to the cart.
   let { data: cart } = await supabaseAdmin
     .from("carts")
     .select("id")
     .eq("customer_id", customer.id)
     .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (!cart) {
@@ -53,6 +57,8 @@ export async function GET() {
 
   // Fetch the active cart together with its items in a single query to avoid
   // the extra round-trip that a separate `getOrCreateActiveCart` call incurs.
+  // order+limit ensures we always use the most recent active cart even if
+  // duplicate carts were created by a previous race condition.
   const { data: cart, error: cartError } = await supabaseAdmin
     .from("carts")
     .select(
@@ -70,25 +76,20 @@ export async function GET() {
     )
     .eq("customer_id", customer.id)
     .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (cartError) {
     return NextResponse.json({ error: cartError.message }, { status: 500 });
   }
 
-  // No active cart yet — create one and return an empty response
+  // No active cart yet — return empty. Do NOT auto-create a cart here;
+  // the POST handler creates the cart lazily when the first item is added.
+  // Creating a cart in a GET is a side-effect that causes duplicate carts
+  // when the React client runs effects twice in Strict Mode.
   if (!cart) {
-    const { data: newCart, error: createError } = await supabaseAdmin
-      .from("carts")
-      .insert({ customer_id: customer.id, status: "active" })
-      .select("id")
-      .single();
-
-    if (createError || !newCart) {
-      return NextResponse.json({ error: "Failed to create cart" }, { status: 500 });
-    }
-
-    return NextResponse.json({ cartId: newCart.id, items: [], total: 0, preferred_start_date: null });
+    return NextResponse.json({ cartId: null, items: [], total: 0, preferred_start_date: null });
   }
 
   // Sort items by sort_order in JavaScript (the nested select format does not
@@ -136,13 +137,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Find or create the customer's active cart
+  // Find or create the customer's active cart.
+  // order+limit ensures we always use the most recent cart if duplicates exist.
   let cartId: string;
   const { data: existingCart } = await supabaseAdmin
     .from("carts")
     .select("id")
     .eq("customer_id", customer.id)
     .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (existingCart) {
@@ -167,7 +171,7 @@ export async function POST(req: NextRequest) {
       .select("id")
       .eq("cart_id", cartId)
       .eq("job_id", job_id)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Update existing item with new unit/pricing values

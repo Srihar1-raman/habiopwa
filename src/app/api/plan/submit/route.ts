@@ -9,7 +9,9 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get active cart with items — fetch all catalog snapshot fields
+  // Get active cart with items — fetch all catalog snapshot fields.
+  // order+limit ensures we pick the most recent active cart even if
+  // duplicate carts exist from a previous race condition.
   const { data: cart } = await supabaseAdmin
     .from("carts")
     .select(
@@ -24,7 +26,9 @@ export async function POST() {
     )
     .eq("customer_id", customer.id)
     .eq("status", "active")
-    .single();
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (!cart || !cart.cart_items || cart.cart_items.length === 0) {
     return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
