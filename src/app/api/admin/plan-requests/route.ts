@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // Verify customer exists
     const { data: customer, error: customerError } = await supabaseAdmin
       .from("customers")
-      .select("id")
+      .select("id, default_supervisor_id")
       .eq("id", customer_id)
       .single();
 
@@ -50,9 +50,20 @@ export async function POST(req: NextRequest) {
 
     const request_code = await generateUniqueRequestCode();
 
+    const insertPayload: Record<string, unknown> = {
+      customer_id,
+      request_code,
+      status: "cart_in_progress",
+    };
+
+    // Auto-populate supervisor if customer has a default set
+    if (customer.default_supervisor_id) {
+      insertPayload.assigned_supervisor_id = customer.default_supervisor_id;
+    }
+
     const { data: planRequest, error: insertError } = await supabaseAdmin
       .from("plan_requests")
-      .insert({ customer_id, request_code, status: "cart_in_progress" })
+      .insert(insertPayload)
       .select("id, request_code, status")
       .single();
 

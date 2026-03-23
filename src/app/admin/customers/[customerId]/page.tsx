@@ -352,22 +352,18 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
-      {/* ── Supervisor Assignment (PRIMARY STEP) ─────────────────────── */}
-      <div className={`bg-white rounded-xl shadow-sm p-5 border-l-4 ${customer.default_supervisor_id ? "border-green-400" : "border-amber-400"}`}>
-        <div className="flex items-center gap-2 mb-3">
-          <UserCog size={16} className={customer.default_supervisor_id ? "text-green-600" : "text-amber-600"} />
-          <h2 className="font-semibold text-gray-900">Assigned Supervisor</h2>
-          {!customer.default_supervisor_id && (
-            <span className="ml-1 text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
-              Required — assign before creating plans
-            </span>
-          )}
+      {/* ── Default Supervisor (Auto-fill) ──────────────────────────── */}
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <UserCog size={15} className="text-gray-400" />
+          <h2 className="font-medium text-gray-700 text-sm">Default Supervisor <span className="text-gray-400 font-normal">(Auto-fill)</span></h2>
         </div>
+        <p className="text-xs text-gray-400 mb-3">Sets the supervisor auto-filled when creating new plans. Does not assign to existing plans.</p>
 
         {customer.default_supervisor && (
-          <div className="mb-3 text-sm text-gray-700">
+          <div className="mb-2 text-sm text-gray-700">
             <p className="font-medium">{customer.default_supervisor.name}</p>
-            <p className="text-gray-500">{customer.default_supervisor.phone}</p>
+            <p className="text-gray-500 text-xs">{customer.default_supervisor.phone}</p>
           </div>
         )}
 
@@ -375,9 +371,9 @@ export default function CustomerDetailPage() {
           <select
             value={selectedDefaultSv}
             onChange={(e) => setSelectedDefaultSv(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]"
           >
-            <option value="">— Choose supervisor —</option>
+            <option value="">— No default —</option>
             {supervisors.map((sv) => (
               <option key={sv.id} value={sv.id}>
                 {sv.name} ({sv.phone})
@@ -387,9 +383,9 @@ export default function CustomerDetailPage() {
           <button
             onClick={handleSaveDefaultSupervisor}
             disabled={savingDefaultSv || selectedDefaultSv === (customer.default_supervisor_id ?? "")}
-            className="px-4 py-2 bg-[#004aad] text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            className="px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
-            {savingDefaultSv ? "Saving…" : customer.default_supervisor_id ? "Reassign" : "Assign"}
+            {savingDefaultSv ? "Saving…" : "Save"}
           </button>
         </div>
         {svError && <p className="text-xs text-red-600 mt-2">{svError}</p>}
@@ -403,8 +399,7 @@ export default function CustomerDetailPage() {
           </h2>
           <button
             onClick={handleCreatePlan}
-            disabled={creatingPlan || !customer.default_supervisor_id}
-            title={!customer.default_supervisor_id ? "Assign a supervisor first" : undefined}
+            disabled={creatingPlan}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-[#004aad] text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={14} />
@@ -421,6 +416,7 @@ export default function CustomerDetailPage() {
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Status</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Monthly Price</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Start Date</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-600">Supervisor</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Created</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Actions</th>
               </tr>
@@ -444,6 +440,13 @@ export default function CustomerDetailPage() {
                   <td className="px-4 py-2.5 text-gray-500">
                     {pr.plan_start_date ?? "—"}
                   </td>
+                  <td className="px-4 py-2.5">
+                    {pr.assigned_supervisor ? (
+                      <span className="text-xs text-gray-700">{pr.assigned_supervisor.name}</span>
+                    ) : (
+                      <span className="text-xs text-amber-600 font-medium">— Unassigned —</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-gray-500">
                     {new Date(pr.created_at).toLocaleDateString()}
                   </td>
@@ -454,7 +457,7 @@ export default function CustomerDetailPage() {
                         className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#004aad] text-white hover:bg-blue-700 transition-colors"
                       >
                         <UserCheck size={12} />
-                        Allocate Supervisor
+                        {pr.assigned_supervisor_id ? "Reassign Supervisor" : "Assign Supervisor"}
                       </button>
                     )}
                     {canReassignSupervisor(pr) && (
