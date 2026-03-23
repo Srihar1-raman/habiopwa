@@ -6,7 +6,7 @@ import ManifestHandler from "@/components/ManifestHandler";
 export const metadata: Metadata = {
   title: "HABIO — Home Services Subscription",
   description: "Scheduled home services, managed seamlessly.",
-  manifest: "/manifest.json",
+  manifest: "/manifest-customer.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

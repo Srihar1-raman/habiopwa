@@ -8,10 +8,10 @@ export default function ManifestHandler() {
 
   useEffect(() => {
     const getManifestUrl = () => {
-      if (pathname.startsWith("/provider")) return "/manifest.json?role=provider";
-      if (pathname.startsWith("/supervisor")) return "/manifest.json?role=supervisor";
-      if (pathname.startsWith("/admin")) return "/manifest.json?role=admin";
-      return "/manifest.json";
+      if (pathname.startsWith("/provider")) return "/manifest-provider.json";
+      if (pathname.startsWith("/supervisor")) return "/manifest-supervisor.json";
+      if (pathname.startsWith("/admin")) return "/manifest-admin.json";
+      return "/manifest-customer.json";
     };
 
     const manifestPath = getManifestUrl();

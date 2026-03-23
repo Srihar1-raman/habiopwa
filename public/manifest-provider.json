@@ -1,6 +1,7 @@
 {
   "name": "habioAssociate",
   "short_name": "Associate",
+  "id": "/provider",
   "description": "HABIO Home Services - Provider App",
   "start_url": "/provider",
   "scope": "/provider",

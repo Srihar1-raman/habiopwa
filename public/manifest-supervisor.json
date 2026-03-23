@@ -1,6 +1,7 @@
 {
   "name": "habioCaptain",
   "short_name": "Captain",
+  "id": "/supervisor",
   "description": "HABIO Home Services - Supervisor App",
   "start_url": "/supervisor",
   "scope": "/supervisor",
