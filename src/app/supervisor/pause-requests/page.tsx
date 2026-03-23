@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, PauseCircle } from "lucide-react";
+import { ChevronLeft, PauseCircle, Calendar, User, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const APPROVAL_COLORS: Record<string, string> = {
@@ -21,6 +21,17 @@ interface PauseRequest {
   reason: string | null;
   customers: { name: string | null; phone: string } | null;
   plan_requests: { request_code: string } | null;
+  job_allocations: {
+    id: string;
+    scheduled_date: string | null;
+    scheduled_start_time: string | null;
+    plan_request_items: { title: string } | null;
+  } | null;
+}
+
+function formatDate(d: string | null) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function PauseRequestsPage() {
@@ -67,7 +78,7 @@ export default function PauseRequestsPage() {
         </button>
         <h1 className="text-base font-bold text-gray-900">Pause Requests</h1>
         {!loading && (
-          <span className="ml-auto text-xs text-gray-500">{requests.length} total</span>
+          <span className="ml-auto text-xs text-gray-500">{requests.length} pending</span>
         )}
       </div>
 
@@ -77,7 +88,7 @@ export default function PauseRequestsPage() {
         ) : requests.length === 0 ? (
           <div className="py-16 flex flex-col items-center gap-3 text-gray-400">
             <PauseCircle className="w-10 h-10 text-gray-300" />
-            <p>No pause requests</p>
+            <p>No pending pause requests</p>
           </div>
         ) : (
           requests.map((req) => (
@@ -85,41 +96,86 @@ export default function PauseRequestsPage() {
               key={req.id}
               className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
             >
-              <div className="flex items-start justify-between mb-2">
-                {req.plan_requests?.request_code && (
-                  <span className="text-xs font-mono font-semibold text-[#004aad]">
-                    {req.plan_requests.request_code}
-                  </span>
-                )}
+              {/* Header row */}
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  {req.plan_requests?.request_code && (
+                    <span className="text-xs font-mono font-semibold text-[#004aad]">
+                      {req.plan_requests.request_code}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <User className="w-3.5 h-3.5 text-gray-400" />
+                    <p className="font-semibold text-gray-900 text-sm">
+                      {req.customers?.name ?? req.customers?.phone}
+                    </p>
+                  </div>
+                  {req.customers?.name && req.customers?.phone && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Phone className="w-3 h-3 text-gray-400" />
+                      <p className="text-xs text-gray-400">{req.customers.phone}</p>
+                    </div>
+                  )}
+                </div>
                 <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-2 ${
                     APPROVAL_COLORS[req.status] ?? "bg-gray-100 text-gray-600"
                   }`}
                 >
-                  {req.status}
+                  {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
                 </span>
               </div>
-              <p className="font-semibold text-gray-900">
-                {req.customers?.name ?? req.customers?.phone}
-              </p>
-              {req.customers?.name && (
-                <p className="text-sm text-gray-400">{req.customers.phone}</p>
-              )}
-              <div className="flex flex-wrap gap-2 mt-2">
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                  {req.pause_type.replace("_", " ")}
-                </span>
-                {req.pause_start_date && (
-                  <span className="text-xs text-gray-400">
-                    {new Date(req.pause_start_date).toLocaleDateString("en-IN")}
-                    {req.pause_end_date &&
-                      ` → ${new Date(req.pause_end_date).toLocaleDateString("en-IN")}`}
+
+              {/* Pause details */}
+              <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 w-20 shrink-0">Type</span>
+                  <span className="text-xs font-semibold text-gray-800">
+                    {req.pause_type === "single_job" ? "Single Job" : "Entire Service"}
                   </span>
+                </div>
+
+                {req.pause_type === "entire_service" && req.pause_start_date && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="text-xs text-gray-700">
+                      {formatDate(req.pause_start_date)}
+                      {req.pause_end_date && req.pause_end_date !== req.pause_start_date
+                        ? ` → ${formatDate(req.pause_end_date)}`
+                        : ""}
+                    </span>
+                  </div>
+                )}
+
+                {req.pause_type === "single_job" && req.job_allocations && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="text-xs text-gray-700">
+                      {req.job_allocations.plan_request_items?.title ?? "Job"}
+                      {req.job_allocations.scheduled_date
+                        ? ` · ${formatDate(req.job_allocations.scheduled_date)}`
+                        : ""}
+                      {req.job_allocations.scheduled_start_time
+                        ? ` at ${req.job_allocations.scheduled_start_time.slice(0, 5)}`
+                        : ""}
+                    </span>
+                  </div>
+                )}
+
+                {req.pause_type === "single_job" && !req.job_allocations && req.pause_start_date && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="text-xs text-gray-700">{formatDate(req.pause_start_date)}</span>
+                  </div>
                 )}
               </div>
+
               {req.reason && (
-                <p className="text-xs text-gray-500 mt-2 italic">{req.reason}</p>
+                <p className="text-xs text-gray-500 mt-2 italic border-l-2 border-gray-200 pl-2">
+                  &ldquo;{req.reason}&rdquo;
+                </p>
               )}
+
               {req.status === "pending" && (
                 <div className="flex gap-2 mt-3">
                   <Button

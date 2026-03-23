@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Calendar, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, X, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -19,10 +19,19 @@ const STATUS_COLORS: Record<string, string> = {
   status_not_marked: "bg-gray-100 text-gray-600",
 };
 
+const ACTIONABLE_STATUSES = new Set([
+  "scheduled",
+  "scheduled_delayed",
+  "in_progress",
+  "in_progress_delayed",
+]);
+
 interface Allocation {
   id: string;
   scheduled_start_time: string | null;
+  scheduled_end_time: string | null;
   status: string;
+  cancellation_reason: string | null;
   service_providers: { name: string } | null;
   plan_request_items: { title: string } | null;
   customers: { name: string | null } | null;
@@ -35,15 +44,26 @@ interface DaySummary {
   cancelled: number;
 }
 
-interface Provider {
+interface ProviderAvailability {
   id: string;
   name: string;
+  provider_type: string | null;
+  is_available: boolean;
+  is_day_off: boolean;
+  on_leave: boolean;
+  is_busy: boolean;
+  conflicts: { id: string; start: string; end: string; title: string }[];
 }
 
 function offsetDate(dateStr: string, days: number): string {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
+}
+
+function getToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export default function DayReportPage() {
@@ -53,24 +73,27 @@ export default function DayReportPage() {
 
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [reallocateId, setReallocateId] = useState<string | null>(null);
+  const [availabilityProviders, setAvailabilityProviders] = useState<ProviderAvailability[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState("");
+  const [selectedProviderAvail, setSelectedProviderAvail] = useState<ProviderAvailability | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
 
+  const isPast = date < getToday();
+
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([
-      fetch(`/api/supervisor/day-report/${date}`).then((r) => r.json()),
-      fetch("/api/supervisor/team").then((r) => r.json()),
-    ]).then(([reportData, teamData]) => {
-      setSummary(reportData.summary ?? null);
-      setAllocations(reportData.allocations ?? []);
-      setProviders(teamData.providers ?? []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    fetch(`/api/supervisor/day-report/${date}`)
+      .then((r) => r.json())
+      .then((reportData) => {
+        setSummary(reportData.summary ?? null);
+        setAllocations(reportData.allocations ?? []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, [date]);
 
   useEffect(() => {
@@ -79,6 +102,30 @@ export default function DayReportPage() {
 
   function navigate(days: number) {
     router.push(`/supervisor/day-report/${offsetDate(date, days)}`);
+  }
+
+  function openReallocate(alloc: Allocation) {
+    setReallocateId(alloc.id);
+    setSelectedProvider("");
+    setSelectedProviderAvail(null);
+    setActionError("");
+    setAvailabilityProviders([]);
+    setAvailabilityLoading(true);
+
+    const qs = new URLSearchParams({ date });
+    if (alloc.scheduled_start_time) qs.set("start_time", alloc.scheduled_start_time.slice(0, 5));
+    if (alloc.scheduled_end_time) qs.set("end_time", alloc.scheduled_end_time.slice(0, 5));
+
+    fetch(`/api/supervisor/providers/availability?${qs}`)
+      .then((r) => r.json())
+      .then((d) => setAvailabilityProviders(d.providers ?? []))
+      .catch(() => {})
+      .finally(() => setAvailabilityLoading(false));
+  }
+
+  function handleProviderSelect(providerId: string) {
+    setSelectedProvider(providerId);
+    setSelectedProviderAvail(availabilityProviders.find((p) => p.id === providerId) ?? null);
   }
 
   async function handleReallocate(allocationId: string) {
@@ -94,6 +141,7 @@ export default function DayReportPage() {
       if (res.ok) {
         setReallocateId(null);
         setSelectedProvider("");
+        setAvailabilityProviders([]);
         load();
       } else {
         const d = await res.json();
@@ -133,24 +181,21 @@ export default function DayReportPage() {
           <ChevronLeft className="w-5 h-5 text-gray-700" />
         </button>
         <h1 className="text-base font-bold text-gray-900 flex-1">Day Report</h1>
+        {isPast && (
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
+        )}
       </div>
 
       {/* Date navigation */}
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2 rounded-full hover:bg-gray-100"
-        >
+        <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-100">
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-[#004aad]" />
           <span className="text-sm font-semibold text-gray-700">{displayDate}</span>
         </div>
-        <button
-          onClick={() => navigate(1)}
-          className="p-2 rounded-full hover:bg-gray-100"
-        >
+        <button onClick={() => navigate(1)} className="p-2 rounded-full hover:bg-gray-100">
           <ChevronRight className="w-5 h-5 text-gray-600" />
         </button>
       </div>
@@ -208,18 +253,23 @@ export default function DayReportPage() {
                           {alloc.service_providers?.name ?? "Unassigned"}
                           {alloc.customers?.name && ` · ${alloc.customers.name}`}
                         </p>
+                        {alloc.cancellation_reason && (
+                          <p className="text-xs text-red-500 mt-0.5">
+                            Reason: {alloc.cancellation_reason}
+                          </p>
+                        )}
                       </div>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
                           STATUS_COLORS[alloc.status] ?? "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {alloc.status.replace("_", " ")}
+                        {alloc.status.replace(/_/g, " ")}
                       </span>
                     </div>
 
-                    {/* Actions */}
-                    {!["completed", "cancelled"].includes(alloc.status) && (
+                    {/* Actions — only for actionable statuses and non-past dates */}
+                    {!isPast && ACTIONABLE_STATUSES.has(alloc.status) && (
                       <>
                         {reallocateId === alloc.id ? (
                           <div className="mt-2 flex flex-col gap-2">
@@ -227,29 +277,64 @@ export default function DayReportPage() {
                               <select
                                 className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
                                 value={selectedProvider}
-                                onChange={(e) => setSelectedProvider(e.target.value)}
+                                onChange={(e) => handleProviderSelect(e.target.value)}
+                                disabled={availabilityLoading}
                               >
-                                <option value="">Select provider</option>
-                                {providers.map((p) => (
+                                <option value="">
+                                  {availabilityLoading ? "Loading providers…" : "Select provider"}
+                                </option>
+                                {availabilityProviders.map((p) => (
                                   <option key={p.id} value={p.id}>
-                                    {p.name}
+                                    {p.name}{p.is_available ? " ✓" : " ✗"}
                                   </option>
                                 ))}
                               </select>
                               <button
-                                onClick={() => setReallocateId(null)}
+                                onClick={() => {
+                                  setReallocateId(null);
+                                  setAvailabilityProviders([]);
+                                }}
                                 className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400"
                               >
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
+
+                            {/* Availability badge */}
+                            {selectedProviderAvail && (
+                              <div
+                                className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg ${
+                                  selectedProviderAvail.is_available
+                                    ? "bg-green-50 text-green-700"
+                                    : "bg-orange-50 text-orange-700"
+                                }`}
+                              >
+                                {selectedProviderAvail.is_available ? (
+                                  <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                ) : (
+                                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                )}
+                                <span>
+                                  {selectedProviderAvail.is_available
+                                    ? "Available"
+                                    : selectedProviderAvail.on_leave
+                                    ? "Unavailable — On leave"
+                                    : selectedProviderAvail.is_day_off
+                                    ? "Unavailable — Day off"
+                                    : selectedProviderAvail.is_busy
+                                    ? `Unavailable — Busy: ${selectedProviderAvail.conflicts.map((c) => c.title).join(", ")}`
+                                    : "Unavailable"}
+                                </span>
+                              </div>
+                            )}
+
                             {actionError && (
                               <p className="text-xs text-red-600">{actionError}</p>
                             )}
                             <Button
                               size="sm"
                               loading={submitting}
-                              disabled={!selectedProvider}
+                              disabled={!selectedProvider || submitting}
                               onClick={() => handleReallocate(alloc.id)}
                             >
                               Confirm Reallocation
@@ -258,11 +343,7 @@ export default function DayReportPage() {
                         ) : (
                           <div className="flex gap-2 mt-2">
                             <button
-                              onClick={() => {
-                                setReallocateId(alloc.id);
-                                setSelectedProvider("");
-                                setActionError("");
-                              }}
+                              onClick={() => openReallocate(alloc)}
                               className="text-xs text-[#004aad] border border-[#004aad]/30 rounded-lg px-3 py-1.5 hover:bg-blue-50"
                             >
                               Reallocate

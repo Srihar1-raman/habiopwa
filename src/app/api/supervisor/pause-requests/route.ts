@@ -9,24 +9,13 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get plan_request_ids assigned to this supervisor
-  const { data: plans } = await supabaseAdmin
-    .from("plan_requests")
-    .select("id")
-    .eq("assigned_supervisor_id", staff.id);
-
-  if (!plans || plans.length === 0) {
-    return NextResponse.json({ pauseRequests: [] });
-  }
-
-  const planIds = plans.map((p) => p.id);
-
+  // Show all pending pause requests so supervisors can act on them
+  // (not filtered by assigned_supervisor_id — plans may not yet be assigned)
   const { data, error } = await supabaseAdmin
     .from("pause_requests")
     .select(
-      "*, customers(name, phone), plan_requests(request_code)"
+      "*, customers(name, phone), plan_requests(request_code), job_allocations(id, scheduled_date, scheduled_start_time, plan_request_items(title))"
     )
-    .in("plan_request_id", planIds)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
 

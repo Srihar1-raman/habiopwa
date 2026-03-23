@@ -7,19 +7,19 @@ import { ChevronLeft, CalendarDays } from "lucide-react";
 interface PauseRequest {
   id: string;
   pause_type: string;
-  start_date: string;
+  pause_start_date: string;
   pause_end_date: string;
   status: string;
-  notes?: string;
+  reason?: string;
 }
 
-const DURATION_OPTIONS = [
-  { label: "1 Day", unit: "day", value: 1 },
-  { label: "3 Days", unit: "day", value: 3 },
-  { label: "1 Week", unit: "week", value: 1 },
-  { label: "2 Weeks", unit: "week", value: 2 },
-  { label: "1 Month", unit: "month", value: 1 },
-];
+interface JobAllocation {
+  id: string;
+  scheduled_start_time: string;
+  scheduled_end_time: string;
+  plan_request_items: { title: string } | null;
+  service_providers: { name: string } | null;
+}
 
 const PAUSE_STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800",
@@ -30,18 +30,24 @@ const PAUSE_STATUS_STYLES: Record<string, string> = {
   reinstated: "bg-gray-100 text-gray-700",
 };
 
-function addDuration(from: string, unit: string, value: number): string {
-  const d = new Date(from);
-  if (unit === "day") d.setDate(d.getDate() + value);
-  else if (unit === "week") d.setDate(d.getDate() + value * 7);
-  else if (unit === "month") d.setMonth(d.getMonth() + value);
-  return d.toISOString().split("T")[0];
-}
-
 function tomorrow(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   return d.toISOString().split("T")[0];
+}
+
+function daysBetween(start: string, end: string): number {
+  // Validate YYYY-MM-DD format
+  if (!start || !end || start.length < 10 || end.length < 10) return 0;
+  // Parse as UTC to avoid timezone-dependent results
+  const startMs = Date.UTC(
+    Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))
+  );
+  const endMs = Date.UTC(
+    Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1, Number(end.slice(8, 10))
+  );
+  const diff = Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
+  return isNaN(diff) ? 0 : diff;
 }
 
 export default function PauseRequestPage() {
@@ -49,22 +55,29 @@ export default function PauseRequestPage() {
   const [hasPlan, setHasPlan] = useState<boolean | null>(null);
   const [planRequestId, setPlanRequestId] = useState<string | null>(null);
   const [pauseType, setPauseType] = useState<"single_job" | "entire_service">("entire_service");
+
+  // entire_service state
   const [startDate, setStartDate] = useState(tomorrow());
-  const [durationIndex, setDurationIndex] = useState(2);
+  const [endDate, setEndDate] = useState("");
+
+  // single_job state
+  const [selectedJobDate, setSelectedJobDate] = useState("");
+  const [jobsForDate, setJobsForDate] = useState<JobAllocation[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState("");
+
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requests, setRequests] = useState<PauseRequest[]>([]);
 
-  const selectedDuration = DURATION_OPTIONS[durationIndex];
-  const endDate = startDate ? addDuration(startDate, selectedDuration.unit, selectedDuration.value) : "";
+  const durationDays = startDate && endDate ? daysBetween(startDate, endDate) : 0;
 
   useEffect(() => {
     fetch("/api/plan/current")
       .then((r) => r.json())
       .then((data) => {
-        // API returns { planRequest: { id, status, ... } }
         const pr = data.planRequest ?? null;
         const active = !!(pr && pr.status === "active");
         setHasPlan(active);
@@ -78,29 +91,62 @@ export default function PauseRequestPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (pauseType !== "single_job" || !selectedJobDate) {
+      setJobsForDate([]);
+      setSelectedJobId("");
+      return;
+    }
+    setLoadingJobs(true);
+    setSelectedJobId("");
+    fetch(`/api/customer/jobs/${selectedJobDate}`)
+      .then((r) => r.json())
+      .then((d) => setJobsForDate(d.jobs ?? []))
+      .catch(() => setJobsForDate([]))
+      .finally(() => setLoadingJobs(false));
+  }, [selectedJobDate, pauseType]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!planRequestId) {
       setError("Could not find your active plan. Please refresh and try again.");
       return;
     }
+    if (pauseType === "entire_service" && (!startDate || !endDate)) {
+      setError("Please select both start and end dates.");
+      return;
+    }
+    if (pauseType === "single_job" && !selectedJobId) {
+      setError("Please select a job to pause.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = {
+        plan_request_id: planRequestId,
+        pause_type: pauseType,
+        notes: notes || undefined,
+      };
+      if (pauseType === "entire_service") {
+        body.pause_start_date = startDate;
+        body.pause_end_date = endDate;
+      } else {
+        // single_job: pause_end_date must equal pause_start_date (same day)
+        body.pause_start_date = selectedJobDate;
+        body.pause_end_date = selectedJobDate;
+        body.job_allocation_id = selectedJobId;
+      }
       const res = await fetch("/api/customer/pause-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan_request_id: planRequestId,
-          pause_type: pauseType,
-          pause_start_date: startDate,
-          pause_end_date: endDate,
-          pause_duration_unit: selectedDuration.unit,
-          pause_duration_value: selectedDuration.value,
-          notes: notes || undefined,
-        }),
+        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Could not submit request. Please try again.");
+        return;
+      }
       setSuccess(true);
       const updated = await fetch("/api/customer/pause-request").then((r) => r.json());
       setRequests(updated.pauseRequests ?? []);
@@ -162,8 +208,8 @@ export default function PauseRequestPage() {
                 <p className="text-sm font-semibold text-gray-700 mb-3">Pause Type</p>
                 <div className="space-y-2">
                   {[
-                    { value: "entire_service", label: "Entire Service", sub: "Pause all scheduled services" },
-                    { value: "single_job", label: "Single Job", sub: "Pause one specific job" },
+                    { value: "entire_service", label: "Entire Service", sub: "Pause all scheduled services for a date range" },
+                    { value: "single_job", label: "Single Job", sub: "Pause one specific scheduled job" },
                   ].map((opt) => (
                     <label
                       key={opt.value}
@@ -177,8 +223,11 @@ export default function PauseRequestPage() {
                         type="radio"
                         name="pauseType"
                         value={opt.value}
-                        checked={pauseType === opt.value as "single_job" | "entire_service"}
-                        onChange={() => setPauseType(opt.value as "single_job" | "entire_service")}
+                        checked={pauseType === (opt.value as "single_job" | "entire_service")}
+                        onChange={() => {
+                          setPauseType(opt.value as "single_job" | "entire_service");
+                          setError(null);
+                        }}
                         className="mt-0.5 accent-[#004aad]"
                       />
                       <div>
@@ -190,46 +239,106 @@ export default function PauseRequestPage() {
                 </div>
               </div>
 
-              {/* Dates */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <CalendarDays className="w-4 h-4 text-[#004aad]" />
-                  <p className="text-sm font-semibold text-gray-700">Pause Period</p>
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Start Date</label>
-                  <input
-                    type="date"
-                    min={tomorrow()}
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    required
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Pause Duration</label>
-                  <select
-                    value={durationIndex}
-                    onChange={(e) => setDurationIndex(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30 bg-white"
-                  >
-                    {DURATION_OPTIONS.map((opt, i) => (
-                      <option key={i} value={i}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {endDate && (
-                  <div className="bg-gray-50 rounded-xl px-3 py-2">
-                    <p className="text-xs text-gray-500">
-                      Services resume on <span className="font-semibold text-gray-800">{endDate}</span>
-                    </p>
+              {/* Entire Service: date range */}
+              {pauseType === "entire_service" && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-[#004aad]" />
+                    <p className="text-sm font-semibold text-gray-700">Pause Period</p>
                   </div>
-                )}
-              </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Start Date</label>
+                    <input
+                      type="date"
+                      min={tomorrow()}
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        if (endDate && e.target.value >= endDate) setEndDate("");
+                      }}
+                      required
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">End Date</label>
+                    <input
+                      type="date"
+                      min={startDate || tomorrow()}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      required
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+                    />
+                  </div>
+
+                  {startDate && endDate && durationDays > 0 && (
+                    <div className="bg-blue-50 rounded-xl px-3 py-2">
+                      <p className="text-xs text-[#004aad] font-medium">
+                        Duration: {durationDays} {durationDays === 1 ? "day" : "days"}
+                      </p>
+                    </div>
+                  )}
+                  {startDate && endDate && durationDays <= 0 && (
+                    <div className="bg-red-50 rounded-xl px-3 py-2">
+                      <p className="text-xs text-red-600">End date must be after start date.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Single Job: pick date then job */}
+              {pauseType === "single_job" && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-[#004aad]" />
+                    <p className="text-sm font-semibold text-gray-700">Select Job Date</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Date</label>
+                    <input
+                      type="date"
+                      min={tomorrow()}
+                      value={selectedJobDate}
+                      onChange={(e) => setSelectedJobDate(e.target.value)}
+                      required
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30"
+                    />
+                  </div>
+
+                  {selectedJobDate && (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Select Job</label>
+                      {loadingJobs ? (
+                        <div className="flex items-center gap-2 py-2">
+                          <div className="w-4 h-4 border-2 border-[#004aad] border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs text-gray-400">Loading jobs…</span>
+                        </div>
+                      ) : jobsForDate.length === 0 ? (
+                        <p className="text-xs text-gray-400 py-1">No jobs scheduled for this date.</p>
+                      ) : (
+                        <select
+                          value={selectedJobId}
+                          onChange={(e) => setSelectedJobId(e.target.value)}
+                          required
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]/30 bg-white"
+                        >
+                          <option value="">Choose a job…</option>
+                          {jobsForDate.map((job) => (
+                            <option key={job.id} value={job.id}>
+                              {job.plan_request_items?.title ?? "Job"} — {job.scheduled_start_time?.slice(0, 5)}
+                              {job.service_providers?.name ? ` · ${job.service_providers.name}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Notes */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
@@ -245,7 +354,11 @@ export default function PauseRequestPage() {
 
               <button
                 type="submit"
-                disabled={submitting || !startDate}
+                disabled={
+                  submitting ||
+                  (pauseType === "entire_service" && (!startDate || !endDate || durationDays <= 0)) ||
+                  (pauseType === "single_job" && (!selectedJobDate || !selectedJobId))
+                }
                 className="w-full py-3.5 rounded-2xl bg-[#004aad] text-white font-semibold text-sm disabled:opacity-50"
               >
                 {submitting ? "Submitting…" : "Submit Pause Request"}
@@ -273,9 +386,12 @@ export default function PauseRequestPage() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  {req.start_date} → {req.pause_end_date}
+                  {req.pause_start_date}
+                  {req.pause_end_date && req.pause_end_date !== req.pause_start_date
+                    ? ` → ${req.pause_end_date}`
+                    : ""}
                 </p>
-                {req.notes && <p className="text-xs text-gray-500 mt-1 italic">{req.notes}</p>}
+                {req.reason && <p className="text-xs text-gray-500 mt-1 italic">{req.reason}</p>}
               </div>
             ))}
           </div>

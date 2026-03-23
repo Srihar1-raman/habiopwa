@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, User, Home, LogOut, Pencil, Save, X } from "lucide-react";
+import {
+  ChevronLeft,
+  User,
+  Home,
+  LogOut,
+  Pencil,
+  Save,
+  X,
+  CreditCard,
+} from "lucide-react";
 
 interface Profile {
   name: string;
@@ -20,6 +29,22 @@ interface Profile {
   diet_pref: string;
 }
 
+interface PlanItem {
+  id: string;
+  title: string;
+  frequency_label: string;
+  price_monthly: number;
+}
+
+interface PlanRequest {
+  id: string;
+  request_code: string;
+  status: string;
+  total_price_monthly: number;
+  plan_start_date: string | null;
+  plan_request_items: PlanItem[];
+}
+
 const FIELD_LABEL: Record<string, string> = {
   flat_no: "Flat No.",
   building: "Building",
@@ -32,6 +57,7 @@ const FIELD_LABEL: Record<string, string> = {
 export default function ProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [planRequest, setPlanRequest] = useState<PlanRequest | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Profile>>({});
   const [loading, setLoading] = useState(true);
@@ -39,32 +65,33 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/customer/profile")
-      .then((r) => r.json())
-      .then((data) => {
-        // API returns { customer: { id, phone, name, customer_profiles: {...} } }
-        const customer = data.customer ?? null;
-        if (customer) {
-          const cp = customer.customer_profiles ?? {};
-          setProfile({
-            name: customer.name ?? "",
-            phone: customer.phone ?? "",
-            flat_no: cp.flat_no ?? "",
-            building: cp.building ?? "",
-            society: cp.society ?? "",
-            sector: cp.sector ?? "",
-            city: cp.city ?? "",
-            pincode: cp.pincode ?? "",
-            home_type: cp.home_type ?? "",
-            bhk: cp.bhk ?? "",
-            bathrooms: cp.bathrooms ?? "",
-            diet_pref: cp.diet_pref ?? "",
-            people_count: cp.people_count ?? "",
-          });
-        }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    Promise.all([
+      fetch("/api/customer/profile").then((r) => r.json()),
+      fetch("/api/plan/current").then((r) => r.json()),
+    ]).then(([profileData, planData]) => {
+      const customer = profileData.customer ?? null;
+      if (customer) {
+        const cp = customer.customer_profiles ?? {};
+        setProfile({
+          name: customer.name ?? "",
+          phone: customer.phone ?? "",
+          flat_no: cp.flat_no ?? "",
+          building: cp.building ?? "",
+          society: cp.society ?? "",
+          sector: cp.sector ?? "",
+          city: cp.city ?? "",
+          pincode: cp.pincode ?? "",
+          home_type: cp.home_type ?? "",
+          bhk: cp.bhk ?? "",
+          bathrooms: cp.bathrooms ?? "",
+          diet_pref: cp.diet_pref ?? "",
+          people_count: cp.people_count ?? "",
+        });
+      }
+      const pr = planData.planRequest ?? null;
+      if (pr?.status === "active") setPlanRequest(pr);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   function startEdit() {
@@ -102,7 +129,6 @@ export default function ProfilePage() {
 
   async function handleSignOut() {
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
-    // Use a hard navigation so the server-cleared httpOnly cookie is respected
     window.location.href = "/login";
   }
 
@@ -226,6 +252,68 @@ export default function ProfilePage() {
               >
                 <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Plan Details — only for active plans */}
+        {planRequest && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <CreditCard className="w-4 h-4 text-[#004aad]" />
+              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide flex-1">
+                Plan Details
+              </h2>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Plan Code</p>
+                <p className="text-sm font-mono font-semibold text-[#004aad]">
+                  {planRequest.request_code}
+                </p>
+              </div>
+              {planRequest.plan_start_date && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Start Date</p>
+                  <p className="text-sm font-medium text-gray-800">
+                    {new Date(planRequest.plan_start_date).toLocaleDateString("en-IN", {
+                      day: "numeric", month: "short", year: "numeric",
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Plan items */}
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-3 py-2 grid grid-cols-[1fr_auto] gap-2 text-xs font-semibold text-gray-500">
+                <span>Service</span>
+                <span className="text-right">Price/m</span>
+              </div>
+              {planRequest.plan_request_items.map((item) => (
+                <div
+                  key={item.id}
+                  className="px-3 py-2.5 border-t border-gray-50 flex items-start justify-between gap-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{item.title}</p>
+                    <p className="text-xs text-gray-400">{item.frequency_label}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                    ₹{item.price_monthly?.toLocaleString("en-IN")}
+                  </p>
+                </div>
+              ))}
+              <div className="px-3 py-2.5 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                <span className="text-xs font-semibold text-gray-500">Total / month</span>
+                <span className="text-sm font-bold text-[#004aad]">
+                  ₹{planRequest.total_price_monthly?.toLocaleString("en-IN")}
+                </span>
+              </div>
             </div>
           </div>
         )}
