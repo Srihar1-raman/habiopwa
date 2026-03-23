@@ -22,6 +22,7 @@ export async function PATCH(
       preferred_start_time,
       preferred_provider_id,
       backup_provider_id,
+      scheduled_day_of_week,
     } = body ?? {};
 
     if (
@@ -29,7 +30,8 @@ export async function PATCH(
       unit_value === undefined &&
       preferred_start_time === undefined &&
       preferred_provider_id === undefined &&
-      backup_provider_id === undefined
+      backup_provider_id === undefined &&
+      scheduled_day_of_week === undefined
     ) {
       return NextResponse.json(
         { error: "At least one field is required" },
@@ -57,6 +59,8 @@ export async function PATCH(
       updates.preferred_provider_id = preferred_provider_id || null;
     if (backup_provider_id !== undefined)
       updates.backup_provider_id = backup_provider_id || null;
+    if (scheduled_day_of_week !== undefined)
+      updates.scheduled_day_of_week = scheduled_day_of_week !== null ? Number(scheduled_day_of_week) : null;
 
     // When unit_value changes, recompute pricing from stored formula params
     if (unit_value !== undefined) {

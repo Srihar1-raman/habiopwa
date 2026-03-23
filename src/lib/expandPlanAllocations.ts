@@ -44,8 +44,8 @@ interface TemplateAlloc {
 }
 
 interface WeekOffRow {
-  provider_id: string;
-  day_off: string; // "monday" | "tuesday" | …
+  service_provider_id: string;
+  day_of_week: string; // "monday" | "tuesday" | …
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -173,11 +173,11 @@ export async function expandPlanAllocations(
   if (primaryIds.length > 0) {
     const { data: rawWeekOffs } = await supabase
       .from("provider_week_offs")
-      .select("provider_id, day_off")
-      .in("provider_id", primaryIds);
+      .select("service_provider_id, day_of_week")
+      .in("service_provider_id", primaryIds);
 
     for (const wo of (rawWeekOffs ?? []) as WeekOffRow[]) {
-      weekOffMap.set(wo.provider_id, wo.day_off.toLowerCase());
+      weekOffMap.set(wo.service_provider_id, wo.day_of_week.toLowerCase());
     }
   }
 
