@@ -352,11 +352,11 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
-      {/* ── Default Supervisor (Auto-fill) ──────────────────────────── */}
+      {/* ── Default Supervisor (Autofill) ──────────────────────────── */}
       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
         <div className="flex items-center gap-2 mb-2">
           <UserCog size={15} className="text-gray-400" />
-          <h2 className="font-medium text-gray-700 text-sm">Default Supervisor <span className="text-gray-400 font-normal">(Auto-fill)</span></h2>
+          <h2 className="font-medium text-gray-700 text-sm">Default Supervisor <span className="text-gray-400 font-normal">(Autofill)</span></h2>
         </div>
         <p className="text-xs text-gray-400 mb-3">Sets the supervisor auto-filled when creating new plans. Does not assign to existing plans.</p>
 
