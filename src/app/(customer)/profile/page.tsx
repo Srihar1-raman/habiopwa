@@ -34,6 +34,13 @@ interface PlanItem {
   title: string;
   frequency_label: string;
   price_monthly: number;
+  unit_type: string;
+  unit_value: number;
+  instances_per_month: number | null;
+  preferred_start_time: string | null;
+  scheduled_day_of_week: number | null;
+  primary_provider: { id: string; name: string; provider_type: string | null } | null;
+  backup_provider: { id: string; name: string; provider_type: string | null } | null;
 }
 
 interface PlanRequest {
@@ -42,6 +49,8 @@ interface PlanRequest {
   status: string;
   total_price_monthly: number;
   plan_start_date: string | null;
+  plan_active_start_date: string | null;
+  plan_active_end_date: string | null;
   plan_request_items: PlanItem[];
 }
 
@@ -286,29 +295,53 @@ export default function ProfilePage() {
                   </p>
                 </div>
               )}
+              {planRequest.plan_active_end_date && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Active Until</p>
+                  <p className="text-sm font-medium text-gray-800">
+                    {new Date(planRequest.plan_active_end_date).toLocaleDateString("en-IN", {
+                      day: "numeric", month: "short", year: "numeric",
+                    })}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Plan items */}
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              <div className="bg-gray-50 px-3 py-2 grid grid-cols-[1fr_auto] gap-2 text-xs font-semibold text-gray-500">
-                <span>Service</span>
-                <span className="text-right">Price/m</span>
-              </div>
-              {planRequest.plan_request_items.map((item) => (
-                <div
-                  key={item.id}
-                  className="px-3 py-2.5 border-t border-gray-50 flex items-start justify-between gap-2"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{item.title}</p>
-                    <p className="text-xs text-gray-400">{item.frequency_label}</p>
+            <div className="space-y-2">
+              {planRequest.plan_request_items.map((item) => {
+                const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                const scheduleText = item.frequency_label === "Daily"
+                  ? `Daily${item.instances_per_month ? ` · ~${item.instances_per_month} visits/mo` : ""}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
+                  : item.scheduled_day_of_week != null
+                  ? `Weekly on ${DOW_NAMES[item.scheduled_day_of_week]}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
+                  : `Weekly${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="border border-gray-100 rounded-xl p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <p className="text-sm font-medium text-gray-800">{item.title}</p>
+                      <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                        ₹{item.price_monthly?.toLocaleString("en-IN")}
+                        <span className="text-xs font-normal text-gray-400">/mo</span>
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500">{scheduleText}</p>
+                    {item.primary_provider && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Provider: <span className="font-medium text-gray-700">{item.primary_provider.name}</span>
+                        {item.backup_provider && (
+                          <span className="text-gray-400"> · Backup: {item.backup_provider.name}</span>
+                        )}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-                    ₹{item.price_monthly?.toLocaleString("en-IN")}
-                  </p>
-                </div>
-              ))}
-              <div className="px-3 py-2.5 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                );
+              })}
+              <div className="px-3 py-2.5 border border-gray-100 rounded-xl bg-gray-50 flex justify-between items-center">
                 <span className="text-xs font-semibold text-gray-500">Total / month</span>
                 <span className="text-sm font-bold text-[#004aad]">
                   ₹{planRequest.total_price_monthly?.toLocaleString("en-IN")}

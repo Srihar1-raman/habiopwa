@@ -29,6 +29,7 @@ interface ItemRow {
   id: string;
   frequency_label: string;
   preferred_start_time: string | null;
+  preferred_provider_id: string | null;
   unit_value: number;
   unit_type: string;
   time_multiple: number | null;
@@ -125,7 +126,7 @@ export async function expandPlanAllocations(
   const { data: rawItems, error: itemsErr } = await supabase
     .from("plan_request_items")
     .select(
-      "id, frequency_label, preferred_start_time, unit_value, unit_type, time_multiple, backup_provider_id, scheduled_day_of_week"
+      "id, frequency_label, preferred_start_time, preferred_provider_id, unit_value, unit_type, time_multiple, backup_provider_id, scheduled_day_of_week"
     )
     .eq("plan_request_id", planRequestId);
 
@@ -161,11 +162,13 @@ export async function expandPlanAllocations(
   }
 
   // ── Step 5: Fetch week-offs for all primary providers ─────────────────────
+  // Collect providers from template allocations AND preferred_provider_id fallbacks
   const primaryIds = [
     ...new Set(
-      [...templateByItem.values()]
-        .map((t) => t.service_provider_id)
-        .filter(Boolean)
+      [
+        ...[...templateByItem.values()].map((t) => t.service_provider_id),
+        ...items.map((i) => i.preferred_provider_id),
+      ].filter(Boolean) as string[]
     ),
   ];
 
@@ -212,16 +215,32 @@ export async function expandPlanAllocations(
 
   for (const item of items) {
     const tmpl = templateByItem.get(item.id);
-    if (!tmpl || !tmpl.service_provider_id) {
+    // Fall back to preferred_provider_id when no template allocation exists
+    // (this supports the admin-only flow where providers are set via plan_request_items
+    // without going through the supervisor allocation step)
+    const primaryId = tmpl?.service_provider_id || item.preferred_provider_id;
+    if (!primaryId) {
       console.warn(
-        `[expandPlanAllocations] No template allocation for item ${item.id} — skipping.`
+        `[expandPlanAllocations] No provider for item ${item.id} — skipping.`
       );
       continue;
     }
 
-    const startTime = tmpl.scheduled_start_time || item.preferred_start_time || "08:00";
-    const endTime = tmpl.scheduled_end_time;
-    const primaryId = tmpl.service_provider_id;
+    const startTime = tmpl?.scheduled_start_time || item.preferred_start_time || "08:00";
+    // Compute end time from start time + item duration when no template row exists
+    const durationMins =
+      item.unit_type === "min"
+        ? item.unit_value
+        : item.time_multiple != null && Number(item.time_multiple) > 0
+        ? Math.round(item.unit_value * Number(item.time_multiple))
+        : 30;
+    const endTime =
+      tmpl?.scheduled_end_time ||
+      (() => {
+        const [h, m] = startTime.split(":").map(Number);
+        const total = h * 60 + m + durationMins;
+        return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+      })();
     const backupId = item.backup_provider_id;
     const primaryDayOff = weekOffMap.get(primaryId) ?? null; // e.g. "sunday"
 

@@ -69,6 +69,8 @@ interface PlanItem {
     max_unit?: number;
     unit_interval?: number;
   } | null;
+  primary_provider?: { id: string; name: string; provider_type: string | null } | null;
+  backup_provider?: { id: string; name: string; provider_type: string | null } | null;
 }
 
 interface ServiceProvider {
@@ -327,12 +329,14 @@ function EditableItemCard({
   planId,
   onUpdate,
   onDelete,
+  hideProvider = false,
 }: {
   item: PlanItem;
   providers: ServiceProvider[];
   planId: string;
   onUpdate: (id: string, updates: Record<string, unknown>) => Promise<void>;
   onDelete: (id: string) => void;
+  hideProvider?: boolean;
 }) {
   const [unitValue, setUnitValue] = useState(item.unit_value);
   const [startTime, setStartTime] = useState(item.preferred_start_time ?? "");
@@ -514,7 +518,8 @@ function EditableItemCard({
         </div>
       </div>
 
-      {/* Provider selection */}
+      {/* Provider selection — hidden before supervisor is assigned (hideProvider=true) */}
+      {!hideProvider && (
       <div className="space-y-2">
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -619,6 +624,7 @@ function EditableItemCard({
           </div>
         )}
       </div>
+      )}
 
       {/* Computed price */}
       <div className="pt-2 border-t border-gray-50 flex flex-wrap items-baseline gap-2">
@@ -647,13 +653,28 @@ function EditableItemCard({
 
 /** Compact read-only table row. */
 function ReadOnlyItemRow({ item }: { item: PlanItem }) {
+  const DOW_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const scheduleInfo = item.frequency_label === "Daily"
+    ? `Daily${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
+    : item.scheduled_day_of_week != null
+    ? `Weekly · ${DOW_NAMES[item.scheduled_day_of_week]}${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`
+    : `Weekly${item.preferred_start_time ? ` · ${item.preferred_start_time}` : ""}`;
+
   return (
     <tr className="border-b border-gray-100">
-      <td className="px-4 py-2.5 text-sm text-gray-800">{item.title}</td>
+      <td className="px-4 py-2.5 text-sm text-gray-800">
+        {item.title}
+        {item.primary_provider && (
+          <p className="text-xs text-gray-400 mt-0.5">
+            {item.primary_provider.name}
+            {item.backup_provider && <span className="text-gray-300"> · backup: {item.backup_provider.name}</span>}
+          </p>
+        )}
+      </td>
       <td className="px-4 py-2.5 text-xs text-gray-500">
         {item.service_categories?.name ?? "—"}
       </td>
-      <td className="px-4 py-2.5 text-xs text-gray-500">{item.frequency_label}</td>
+      <td className="px-4 py-2.5 text-xs text-gray-500">{scheduleInfo}</td>
       <td className="px-4 py-2.5 text-sm text-gray-700 text-right">
         {formatUnitValue(item.unit_value, item.unit_type)}
       </td>
@@ -764,11 +785,21 @@ export default function PlanDetailPage() {
       .then((r) => r.json())
       .then((d) => setSupervisors(d.staff ?? []))
       .catch(() => {});
-    fetch("/api/admin/providers")
+    // Providers are loaded after plan fetch (see below) — start with empty
+  }, [loadPlan]);
+
+  // Re-fetch providers whenever plan loads: use supervisor-team-only when supervisor is assigned
+  useEffect(() => {
+    if (!plan) return;
+    const supervisorId = plan.assigned_supervisor_id;
+    const url = supervisorId
+      ? `/api/admin/providers?supervisor_id=${supervisorId}`
+      : "/api/admin/providers";
+    fetch(url)
       .then((r) => r.json())
       .then((d) => setProviders(d.providers ?? []))
       .catch(() => {});
-  }, [loadPlan]);
+  }, [plan]);
 
   async function patchPlan(body: Record<string, unknown>) {
     const res = await fetch(`/api/admin/plan-requests/${planId}`, {
@@ -1002,6 +1033,7 @@ export default function PlanDetailPage() {
                 planId={planId}
                 onUpdate={handleUpdateItem}
                 onDelete={handleDeleteItem}
+                hideProvider={true}
               />
             ))
           )}
@@ -1177,6 +1209,16 @@ export default function PlanDetailPage() {
                   <h2 className="font-semibold text-gray-900 mb-3">Assigned Supervisor</h2>
                   <p className="text-sm text-gray-800 font-medium">{supervisor.name}</p>
                   <p className="text-sm text-gray-500">{supervisor.phone}</p>
+                  {providers.length > 0 && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      {providers.length} provider{providers.length !== 1 ? "s" : ""} in this supervisor&apos;s team available for allocation
+                    </p>
+                  )}
+                  {providers.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      ⚠ No providers found in this supervisor&apos;s team
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1271,43 +1313,52 @@ export default function PlanDetailPage() {
 
           {/* ── active / paused / completed: plan details ── */}
           {["active", "paused", "completed"].includes(status) && (
-            <div className="bg-white rounded-xl shadow-sm p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              {supervisor && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Assigned Supervisor</p>
-                  <p className="font-medium text-gray-800">{supervisor.name}</p>
+            <>
+              <div className="bg-white rounded-xl shadow-sm p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                {supervisor && (
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Assigned Supervisor</p>
+                    <p className="font-medium text-gray-800">{supervisor.name}</p>
+                  </div>
+                )}
+                {plan.plan_active_start_date && (
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Active From</p>
+                    <p className="text-gray-700">{plan.plan_active_start_date}</p>
+                  </div>
+                )}
+                {plan.plan_active_end_date && (
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Active Until</p>
+                    <p className="text-gray-700">{plan.plan_active_end_date}</p>
+                  </div>
+                )}
+                {payment && (
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Payment</p>
+                    <p className="text-gray-700">
+                      ₹{payment.amount}{" "}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_STATUS_COLORS[payment.status] ?? "bg-gray-100 text-gray-600"}`}>
+                        {payment.status}
+                      </span>
+                    </p>
+                  </div>
+                )}
+                {plan.admin_remarks && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-400 mb-0.5">Admin Remarks</p>
+                    <p className="text-gray-700 whitespace-pre-wrap">{plan.admin_remarks}</p>
+                  </div>
+                )}
+              </div>
+              {/* Item details with providers */}
+              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h2 className="font-semibold text-gray-900">Plan Items</h2>
                 </div>
-              )}
-              {plan.plan_active_start_date && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Active From</p>
-                  <p className="text-gray-700">{plan.plan_active_start_date}</p>
-                </div>
-              )}
-              {plan.plan_active_end_date && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Active Until</p>
-                  <p className="text-gray-700">{plan.plan_active_end_date}</p>
-                </div>
-              )}
-              {payment && (
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">Payment</p>
-                  <p className="text-gray-700">
-                    ₹{payment.amount}{" "}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_STATUS_COLORS[payment.status] ?? "bg-gray-100 text-gray-600"}`}>
-                      {payment.status}
-                    </span>
-                  </p>
-                </div>
-              )}
-              {plan.admin_remarks && (
-                <div className="col-span-2">
-                  <p className="text-xs text-gray-400 mb-0.5">Admin Remarks</p>
-                  <p className="text-gray-700 whitespace-pre-wrap">{plan.admin_remarks}</p>
-                </div>
-              )}
-            </div>
+                <ItemsTable items={items} />
+              </div>
+            </>
           )}
         </>
       )}

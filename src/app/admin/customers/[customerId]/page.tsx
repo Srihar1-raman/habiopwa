@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, UserCheck, RefreshCw, Plus, UserCog } from "lucide-react";
+import { ArrowLeft, Plus, UserCog } from "lucide-react";
 
 interface CustomerProfile {
   flat_no: string | null;
@@ -90,101 +90,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-100 text-red-700",
 };
 
-function SupervisorAllocateModal({
-  planRequest,
-  supervisors,
-  onClose,
-  onSuccess,
-}: {
-  planRequest: PlanRequest;
-  supervisors: Supervisor[];
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [selectedSupervisor, setSelectedSupervisor] = useState(
-    planRequest.assigned_supervisor_id ?? ""
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const isReassign = !!planRequest.assigned_supervisor_id;
-
-  async function handleSubmit() {
-    if (!selectedSupervisor) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/plan-requests/${planRequest.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assigned_supervisor_id: selectedSupervisor }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
-        onSuccess();
-        onClose();
-      }
-    } catch {
-      setError("Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-          {isReassign ? "Reassign Supervisor" : "Allocate Supervisor"}
-        </h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Plan: <span className="font-mono">{planRequest.request_code}</span>
-        </p>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Select Supervisor
-          </label>
-          <select
-            value={selectedSupervisor}
-            onChange={(e) => setSelectedSupervisor(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#004aad]"
-          >
-            <option value="">— Choose supervisor —</option>
-            {supervisors.map((sv) => (
-              <option key={sv.id} value={sv.id}>
-                {sv.name} ({sv.phone})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {error && (
-          <p className="text-sm text-red-600 mb-3">{error}</p>
-        )}
-
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!selectedSupervisor || saving}
-            className="px-4 py-2 text-sm bg-[#004aad] text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? "Saving…" : isReassign ? "Reassign" : "Allocate"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function CustomerDetailPage() {
   const router = useRouter();
   const { customerId } = useParams<{ customerId: string }>();
@@ -194,7 +99,6 @@ export default function CustomerDetailPage() {
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [allocateModal, setAllocateModal] = useState<PlanRequest | null>(null);
   const [creatingPlan, setCreatingPlan] = useState(false);
   // Customer-level supervisor assignment
   const [selectedDefaultSv, setSelectedDefaultSv] = useState("");
@@ -256,7 +160,7 @@ export default function CustomerDetailPage() {
 
   useEffect(() => {
     loadData();
-    // Load active supervisors for the allocation modal and supervisor assignment
+    // Load active supervisors for the default supervisor assignment
     fetch("/api/admin/staff?role=supervisor&status=active")
       .then((r) => r.json())
       .then((data) => setSupervisors(data.staff ?? []))
@@ -269,17 +173,6 @@ export default function CustomerDetailPage() {
       ? customer.customer_profiles[0]
       : customer.customer_profiles
     : null;
-
-  function canAllocateSupervisor(pr: PlanRequest) {
-    return (
-      pr.status === "submitted" ||
-      pr.status === "captain_allocation_pending"
-    );
-  }
-
-  function canReassignSupervisor(pr: PlanRequest) {
-    return pr.status === "captain_review_pending";
-  }
 
   if (loading) {
     return (
@@ -418,7 +311,6 @@ export default function CustomerDetailPage() {
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Start Date</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Supervisor</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600">Created</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-600">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -449,26 +341,6 @@ export default function CustomerDetailPage() {
                   </td>
                   <td className="px-4 py-2.5 text-gray-500">
                     {new Date(pr.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    {canAllocateSupervisor(pr) && (
-                      <button
-                        onClick={() => setAllocateModal(pr)}
-                        className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#004aad] text-white hover:bg-blue-700 transition-colors"
-                      >
-                        <UserCheck size={12} />
-                        {pr.assigned_supervisor_id ? "Reassign Supervisor" : "Assign Supervisor"}
-                      </button>
-                    )}
-                    {canReassignSupervisor(pr) && (
-                      <button
-                        onClick={() => setAllocateModal(pr)}
-                        className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <RefreshCw size={12} />
-                        Reassign Supervisor
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}
@@ -519,19 +391,6 @@ export default function CustomerDetailPage() {
           </table>
         )}
       </div>
-
-      {/* Supervisor Allocation Modal */}
-      {allocateModal && (
-        <SupervisorAllocateModal
-          planRequest={allocateModal}
-          supervisors={supervisors}
-          onClose={() => setAllocateModal(null)}
-          onSuccess={() => {
-            setLoading(true);
-            loadData();
-          }}
-        />
-      )}
     </div>
   );
 }
