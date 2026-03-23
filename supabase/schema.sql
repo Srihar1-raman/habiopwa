@@ -401,6 +401,8 @@ CREATE TABLE pause_requests (
   pause_end_date           date,
   pause_duration_unit      text,
   pause_duration_value     int,
+  job_allocation_id        uuid REFERENCES job_allocations(id) ON DELETE SET NULL,
+  reason                   text,
   status                   pause_status NOT NULL DEFAULT 'pending',
   created_at               timestamptz DEFAULT now(),
   updated_at               timestamptz DEFAULT now()
