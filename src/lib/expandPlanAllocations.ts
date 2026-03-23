@@ -108,7 +108,7 @@ export async function expandPlanAllocations(
     return;
   }
 
-  const endDate = addDays(startDate, 29); // 30 days inclusive
+  const endDate = addDays(startDate, 29); // start + 29 days = 30 calendar days total (inclusive)
 
   // ── Step 2: Write plan_active_start_date / plan_active_end_date ───────────
   const { error: updateErr } = await supabase

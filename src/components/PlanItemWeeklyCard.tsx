@@ -139,11 +139,11 @@ function computePrices(item: PlanItemData, uv: number): { base: number; effectiv
 // ─── Availability badge ───────────────────────────────────────────────────────
 
 function AvailBadge({ avail }: { avail: DayAvailability | null | undefined }) {
-  if (!avail) return <span className="text-gray-300 text-xs">?</span>;
-  if (avail.on_leave) return <span title="On leave" className="text-red-500 text-xs">🛑</span>;
-  if (avail.is_day_off) return <span title={`Day off (${avail.day_off_day ?? ""})`} className="text-amber-500 text-xs">🌙</span>;
-  if (avail.is_busy) return <span title={`Busy: ${avail.conflicts.map((c) => `${c.title} ${c.start}-${c.end}`).join(", ")}`} className="text-orange-500 text-xs">⚠</span>;
-  return <span title="Free" className="text-green-500 text-xs">✓</span>;
+  if (!avail) return <span className="text-gray-300 text-xs" aria-label="Unknown availability">?</span>;
+  if (avail.on_leave) return <span title="On leave" aria-label="On leave" className="text-red-500 text-xs">🛑</span>;
+  if (avail.is_day_off) return <span title={`Day off (${avail.day_off_day ?? ""})`} aria-label={`Day off${avail.day_off_day ? ` (${avail.day_off_day})` : ""}`} className="text-amber-500 text-xs">🌙</span>;
+  if (avail.is_busy) return <span title={`Busy: ${avail.conflicts.map((c) => `${c.title} ${c.start}-${c.end}`).join(", ")}`} aria-label={`Busy (${avail.conflicts.length} conflict${avail.conflicts.length !== 1 ? "s" : ""})`} className="text-orange-500 text-xs">⚠</span>;
+  return <span title="Free" aria-label="Free" className="text-green-500 text-xs">✓</span>;
 }
 
 // ─── 7-day week strip ─────────────────────────────────────────────────────────
@@ -318,13 +318,12 @@ export function PlanItemWeeklyCard({
   );
 
   useEffect(() => {
-    if (primaryProviderId && startTime && endTime) {
-      fetchWeekAvailability(primaryProviderId, backupProviderId, startTime, endTime);
+    const et = startTime ? addMinutes(startTime, durationMins) : "";
+    if (primaryProviderId && startTime && et) {
+      fetchWeekAvailability(primaryProviderId, backupProviderId, startTime, et);
     } else {
       setWeekDayAvails([]);
     }
-    // endTime changes with startTime/unitValue — no need to list endTime separately
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryProviderId, backupProviderId, startTime, durationMins, fetchWeekAvailability]);
 
   // Find primary provider's availability map (use the plan start date as reference)
