@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     expectations_snapshot,
   } = body;
 
-  if (!category_id || !unit_price_monthly) {
+  if (!category_id || unit_price_monthly == null) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     .select("id")
     .eq("customer_id", customer.id)
     .eq("status", "active")
-    .single();
+    .maybeSingle();
 
   if (existingCart) {
     cartId = existingCart.id as string;
