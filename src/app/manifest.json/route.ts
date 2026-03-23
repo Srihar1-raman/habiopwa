@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export function GET(request: NextRequest) {
-  const pathname = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const role = url.searchParams.get("role");
   
-  const manifestMap: Record<string, object> = {
-    "/provider": {
+  const roleManifests: Record<string, object> = {
+    provider: {
       name: "habioAssociate",
       short_name: "Associate",
       description: "HABIO Home Services - Provider App",
@@ -20,7 +21,7 @@ export function GET(request: NextRequest) {
         { src: "/icons/icon-512-provider-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
       ]
     },
-    "/supervisor": {
+    supervisor: {
       name: "habioCaptain",
       short_name: "Captain",
       description: "HABIO Home Services - Supervisor App",
@@ -36,7 +37,7 @@ export function GET(request: NextRequest) {
         { src: "/icons/icon-512-supervisor-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
       ]
     },
-    "/admin": {
+    admin: {
       name: "habio Admin",
       short_name: "Admin",
       description: "HABIO Home Services - Admin Portal",
@@ -72,18 +73,9 @@ export function GET(request: NextRequest) {
     ]
   };
 
-  // Check if path starts with any known route
-  for (const [route, manifest] of Object.entries(manifestMap)) {
-    if (pathname.startsWith(route)) {
-      return NextResponse.json(manifest, {
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-        },
-      });
-    }
-  }
+  const manifest = role && roleManifests[role] ? roleManifests[role] : defaultManifest;
 
-  return NextResponse.json(defaultManifest, {
+  return NextResponse.json(manifest, {
     headers: {
       "Cache-Control": "no-cache, no-store, must-revalidate",
     },
