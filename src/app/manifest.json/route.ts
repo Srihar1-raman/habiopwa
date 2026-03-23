@@ -8,6 +8,7 @@ export function GET(request: NextRequest) {
     provider: {
       name: "habioAssociate",
       short_name: "Associate",
+      id: "/provider",
       description: "HABIO Home Services - Provider App",
       start_url: "/provider",
       scope: "/provider",
@@ -24,6 +25,7 @@ export function GET(request: NextRequest) {
     supervisor: {
       name: "habioCaptain",
       short_name: "Captain",
+      id: "/supervisor",
       description: "HABIO Home Services - Supervisor App",
       start_url: "/supervisor",
       scope: "/supervisor",
@@ -40,6 +42,7 @@ export function GET(request: NextRequest) {
     admin: {
       name: "habio Admin",
       short_name: "Admin",
+      id: "/admin",
       description: "HABIO Home Services - Admin Portal",
       start_url: "/admin",
       scope: "/admin",
@@ -59,6 +62,7 @@ export function GET(request: NextRequest) {
   const defaultManifest = {
     name: "habio",
     short_name: "habio",
+    id: "/",
     description: "HABIO Home Services - Customer App",
     start_url: "/",
     scope: "/",
